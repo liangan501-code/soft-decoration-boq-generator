@@ -6,6 +6,6 @@
   "scripts": {
     "start": "python3 -m http.server 4173",
     "check": "npm test && python3 - <<'PY'\nfrom pathlib import Path\nfor file in ['index.html', 'src/styles.css', 'src/app.js']:\n    text = Path(file).read_text(encoding='utf-8')\n    assert text.strip(), f'{file} is empty'\nhtml = Path('index.html').read_text(encoding='utf-8')\nassert './src/app.js' in html, 'index.html must load ./src/app.js for GitHub Pages'\nprint('static interface files are present and readable')\nPY",
-    "test": "node --test tests/inline-input-focus.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   }
 }

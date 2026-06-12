@@ -135,6 +135,98 @@ const styleProfiles = {
   黑金风: { adjective: "黑金", material: "黑色烤漆、黑钛金属、深色岩板、皮革", color: "曜石黑 / 古铜金 / 深灰", supplier: "Noir Gold Works", note: "控制反光材质比例，灯光色温建议 2700K-3000K。" },
 };
 
+
+const styleProductNames = {
+  奶油风: {
+    主沙发: "奶油柔模块沙发",
+    茶几: "奶油系弧形茶几",
+    边几: "奶油圆润边几",
+    地毯: "奶油羊毛地毯",
+    装饰画: "奶油肌理装饰画",
+    落地灯: "奶油雾面落地灯",
+    餐桌: "奶油微水泥餐桌",
+    餐椅: "奶油羊羔绒餐椅",
+    吊灯: "奶油系云朵吊灯",
+    床: "奶油软包床",
+    床头柜: "奶油圆角床头柜",
+    床品: "奶油亲肤床品套装",
+    窗帘: "奶油遮光窗帘",
+  },
+  中古风: {
+    主沙发: "中古胡桃木框架沙发",
+    茶几: "胡桃木茶几",
+    边几: "胡桃木边几",
+    地毯: "中古感羊毛地毯",
+    装饰画: "抽象肌理装饰画",
+    落地灯: "复古金属落地灯",
+    休闲椅: "中古皮革休闲椅",
+    餐桌: "中古胡桃木餐桌",
+    餐椅: "中古藤编餐椅",
+    吊灯: "复古金属吊灯",
+    床: "中古胡桃木床",
+    床头柜: "中古胡桃木床头柜",
+    床品: "复古棉麻床品套装",
+    窗帘: "中古亚麻窗帘",
+  },
+  轻奢风: {
+    主沙发: "金属线条沙发",
+    茶几: "岩板茶几",
+    边几: "香槟金边几",
+    地毯: "轻奢丝感地毯",
+    装饰画: "轻奢金属框装饰画",
+    落地灯: "轻奢金属落地灯",
+    吊灯: "轻奢金属吊灯",
+  },
+  法式: {
+    主沙发: "法式弧形沙发",
+    茶几: "法式雕花茶几",
+    边几: "法式雕花边几",
+    地毯: "法式花纹羊毛地毯",
+    装饰画: "法式复古装饰画",
+    落地灯: "复古黄铜落地灯",
+    吊灯: "法式黄铜吊灯",
+  },
+  雅奢: {
+    主沙发: "定制皮革沙发",
+    茶几: "雅奢大理石茶几",
+    边几: "雅奢金属边几",
+    地毯: "雅奢手工羊毛地毯",
+    装饰画: "艺术肌理挂画",
+    落地灯: "雅奢拉丝金属落地灯",
+  },
+  度假风: {
+    主沙发: "亚麻布艺沙发",
+    茶几: "柚木休闲茶几",
+    边几: "藤编边几",
+    地毯: "自然肌理地毯",
+    装饰画: "海岛肌理装饰画",
+    落地灯: "藤编落地灯",
+    休闲椅: "藤编休闲椅",
+  },
+  黑金风: {
+    主沙发: "黑金皮革沙发",
+    茶几: "深色岩板茶几",
+    边几: "黑钛金属边几",
+    地毯: "深灰羊毛地毯",
+    装饰画: "黑金抽象装饰画",
+    落地灯: "金属质感落地灯",
+  },
+};
+
+const styleSpaceTemplateOverrides = {
+  中古风: {
+    客厅: [
+      ["主沙发", "中古胡桃木框架沙发", "3200 × 980 × 720mm", 1, "套", [36000, 72000], "胡桃木框架需与茶几、边几木色同批确认。"],
+      ["茶几", "胡桃木茶几", "1200 × 650 × 380mm", 1, "张", [8800, 22000], "保留木纹肌理，台面高度需匹配沙发坐高。"],
+      ["休闲椅", "中古皮革休闲椅", "780 × 820 × 760mm", 1, "把", [6800, 18000], "皮革颜色建议选焦糖棕或深棕，与胡桃木形成层次。"],
+      ["地毯", "中古感羊毛地毯", "2400 × 3400mm", 1, "张", [8500, 24000], "可选择低饱和几何纹样，覆盖沙发前脚。"],
+      ["落地灯", "复古金属落地灯", "H1550-1700mm，2700K-3000K", 1, "盏", [3600, 12000], "金属件建议做旧铜或黑钛，作为夜间氛围光。"],
+      ["边几", "胡桃木边几", "Φ450 × 520mm", 2, "只", [2600, 7800], "可放置落地灯、艺术书或小型雕塑。"],
+      ["装饰画", "抽象肌理装饰画", "1200 × 1600mm", 1, "幅", [5200, 19000], "画面选择橄榄绿、暖棕或米灰呼应整体色板。"],
+    ],
+  },
+};
+
 const spaceTemplates = {
   客厅: [
     ["主沙发", "模块沙发", "3200 × 980 × 720mm", 1, "套", [32000, 68000], "建议按电视墙与茶几轴线复核坐深。"],
@@ -274,6 +366,8 @@ const elements = {
   formSubtotal: document.querySelector("#formSubtotal"),
   suggestionDialog: document.querySelector("#suggestionDialog"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
+  templateConflictDialog: document.querySelector("#templateConflictDialog"),
+  templateConflictMessage: document.querySelector("#templateConflictMessage"),
   toast: document.querySelector("#toast"),
 };
 
@@ -448,14 +542,22 @@ function recommendedUnitPrice(range) {
   return Math.round((Number(min) + Number(max)) / 2);
 }
 
+function getTemplateRows(space, style) {
+  return styleSpaceTemplateOverrides[style]?.[space] || spaceTemplates[space] || spaceTemplates.客厅;
+}
+
+function resolveProductName(style, category, baseName) {
+  return styleProductNames[style]?.[category] || `${styleProfiles[style]?.adjective || "风格化"}${baseName}`;
+}
+
 function buildTemplateItems(space, style) {
   const profile = styleProfiles[style] || styleProfiles.奶油风;
-  const templates = spaceTemplates[space] || spaceTemplates.客厅;
+  const templates = getTemplateRows(space, style);
   return templates.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => ({
     id: createId(),
     space,
     category,
-    name: `${profile.adjective}${baseName}`,
+    name: resolveProductName(style, category, baseName),
     spec: `常见尺寸：${size}；材质：${profile.material}；颜色：${profile.color}`,
     quantity,
     unit,
@@ -467,8 +569,10 @@ function buildTemplateItems(space, style) {
   }));
 }
 
-function appendGeneratedItems(generatedItems, message) {
-  state.items = [...state.items, ...generatedItems];
+function applyGeneratedItems(generatedItems, message, spacesToReplace = []) {
+  const replaceSpaces = new Set(spacesToReplace);
+  const existingItems = replaceSpaces.size ? state.items.filter((item) => !replaceSpaces.has(item.space)) : state.items;
+  state.items = [...existingItems, ...generatedItems];
   pendingOnly = false;
   query = "";
   saveState();
@@ -477,25 +581,72 @@ function appendGeneratedItems(generatedItems, message) {
   showToast(message);
 }
 
-function generateTemplate() {
-  const space = elements.templateSpaceInput.value;
-  const style = elements.templateStyleInput.value;
-  const generatedItems = buildTemplateItems(space, style);
-  appendGeneratedItems(generatedItems, `已生成 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`);
+function requestTemplateConflictAction(message) {
+  if (!elements.templateConflictDialog?.showModal) {
+    const fallback = window.prompt(`${message}\n请输入：替换 / 追加 / 取消`, "替换");
+    if (fallback === "替换" || fallback === "追加") return Promise.resolve(fallback);
+    return Promise.resolve("取消");
+  }
+
+  elements.templateConflictMessage.textContent = message;
+  elements.templateConflictDialog.returnValue = "";
+  elements.templateConflictDialog.showModal();
+
+  return new Promise((resolve) => {
+    const handleClose = () => {
+      elements.templateConflictDialog.removeEventListener("close", handleClose);
+      resolve(elements.templateConflictDialog.returnValue || "取消");
+    };
+    elements.templateConflictDialog.addEventListener("close", handleClose);
+  });
 }
 
-function generateAllSpacesTemplate() {
+async function getGenerationAction(spaces, scopeLabel) {
+  const hasExistingItems = state.items.some((item) => spaces.includes(item.space));
+  if (!hasExistingItems) return "追加";
+  return requestTemplateConflictAction(`${scopeLabel}已有清单，是否替换为新的风格模板？`);
+}
+
+async function generateTemplate() {
+  const space = elements.templateSpaceInput.value;
+  const style = elements.templateStyleInput.value;
+  const action = await getGenerationAction([space], "当前空间");
+  if (action === "取消") {
+    showToast("已取消生成，当前清单未改变");
+    return;
+  }
+
+  const generatedItems = buildTemplateItems(space, style);
+  const spacesToReplace = action === "替换" ? [space] : [];
+  applyGeneratedItems(generatedItems, `已${action} ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`, spacesToReplace);
+}
+
+async function generateAllSpacesTemplate() {
   const style = elements.templateStyleInput.value;
   const spaces = Object.keys(spaceTemplates);
+  const action = await getGenerationAction(spaces, "当前项目空间");
+  if (action === "取消") {
+    showToast("已取消一键生成，当前清单未改变");
+    return;
+  }
+
   const generatedItems = spaces.flatMap((space) => buildTemplateItems(space, style));
-  appendGeneratedItems(generatedItems, `已一键生成 ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`);
+  const spacesToReplace = action === "替换" ? spaces : [];
+  applyGeneratedItems(generatedItems, `已${action} ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`, spacesToReplace);
 }
 
-function applyLibraryTemplate() {
+async function applyLibraryTemplate() {
   const space = elements.templateSpaceInput.value;
   const style = elements.templateStyleInput.value;
+  const action = await getGenerationAction([space], "当前空间");
+  if (action === "取消") {
+    showToast("已取消应用模板库，当前清单未改变");
+    return;
+  }
+
   const generatedItems = buildTemplateItems(space, style);
-  appendGeneratedItems(generatedItems, `已应用模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`);
+  const spacesToReplace = action === "替换" ? [space] : [];
+  applyGeneratedItems(generatedItems, `已${action}模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`, spacesToReplace);
 }
 
 function setLibraryCard(card) {
