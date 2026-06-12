@@ -139,11 +139,24 @@
             </div>
             <span>7 空间 × 7 风格</span>
           </div>
-          <div class="library-grid">
-            <article><strong>空间模板</strong><p>客厅、餐厅、主卧、次卧、玄关、洽谈区、书房，自动带出常见软装品类与数量。</p></article>
-            <article><strong>风格推荐</strong><p>奶油风、中古风、轻奢风、法式、雅奢、度假风、黑金风，自动匹配材质、颜色与供应商备注。</p></article>
-            <article><strong>双模式交付</strong><p>客户汇报版隐藏供应商与内部成本；内部采购版保留执行单价、供应商和采购备注。</p></article>
+          <div class="library-grid" id="templateLibraryCards">
+            <button class="library-card" type="button" data-library-card="space" aria-expanded="false" aria-controls="templateLibraryPanel">
+              <strong>空间模板</strong>
+              <p>客厅、餐厅、主卧、次卧、玄关、洽谈区、书房，自动带出常见软装品类与数量。</p>
+              <span>展开选择空间 →</span>
+            </button>
+            <button class="library-card" type="button" data-library-card="style" aria-expanded="false" aria-controls="templateLibraryPanel">
+              <strong>风格推荐</strong>
+              <p>奶油风、中古风、轻奢风、法式、雅奢、度假风、黑金风，自动匹配材质、颜色与供应商备注。</p>
+              <span>展开选择风格 →</span>
+            </button>
+            <button class="library-card" type="button" data-library-card="mode" aria-expanded="false" aria-controls="templateLibraryPanel">
+              <strong>双模式交付</strong>
+              <p>客户汇报版隐藏供应商与内部成本；内部采购版保留执行单价、供应商和采购备注。</p>
+              <span>切换交付模式 →</span>
+            </button>
           </div>
+          <div class="library-panel" id="templateLibraryPanel" aria-live="polite"></div>
         </section>
 
         <section class="content-grid">
