@@ -126,8 +126,8 @@
         <section class="template-builder panel ai-generator" id="templateBuilder" aria-labelledby="templateBuilderTitle">
           <div class="template-builder-intro">
             <p class="eyebrow">AI BOQ Generator</p>
-            <h3 id="templateBuilderTitle">根据平面图与效果图生成软装清单</h3>
-            <p>系统将结合平面图、效果图、项目类型与风格生成软装 BOQ。当前静态版本先基于项目类型、空间、风格、面积与预算生成专业清单模板，并预留后续 AI 图像识别接口。</p>
+            <h3 id="templateBuilderTitle">根据平面图与效果图 / 软装方案生成软装清单</h3>
+            <p>系统将结合平面图、效果图 / 软装方案、项目类型与风格生成软装 BOQ。当前静态版本先基于项目类型、空间、风格、面积与预算生成专业清单模板，并预留后续 AI 图像识别接口。</p>
           </div>
 
           <div class="generator-steps" aria-label="AI 软装清单生成流程">
@@ -136,7 +136,7 @@
                 <span>01</span>
                 <div>
                   <h4 id="uploadStepTitle">上传资料</h4>
-                  <p>平面图与效果图为必填资料，刷新页面后预览会保存在本地浏览器。</p>
+                  <p>平面图与效果图 / 软装方案为必填资料，刷新页面后预览会保存在本地浏览器。</p>
                 </div>
               </div>
               <div class="upload-grid">
@@ -160,7 +160,7 @@
                 <article class="upload-card" data-upload-card="renderings">
                   <div class="upload-card-head">
                     <div>
-                      <strong>上传效果图 <em>*</em></strong>
+                      <strong>上传效果图 / 软装方案 <em>*</em></strong>
                       <span id="renderingUploadStatus">未上传</span>
                     </div>
                     <button class="mini-button" type="button" id="renderingUploadBtn">选择图片</button>
@@ -168,13 +168,13 @@
                   <input id="renderingInput" type="file" accept="image/*" multiple hidden />
                   <div class="upload-dropzone" data-upload-trigger="renderings">
                     <span class="upload-icon">✦</span>
-                    <p>上传客餐厅、卧室、公区等效果图</p>
-                    <small>支持多张效果图，生成时用于风格与陈设判断</small>
+                    <p>上传客餐厅、卧室、公区等效果图或软装方案</p>
+                    <small>支持多张效果图、软装方案图，生成时用于风格与陈设判断</small>
                   </div>
-                  <div class="upload-preview-grid" id="renderingPreview" aria-label="效果图预览"></div>
+                  <div class="upload-preview-grid" id="renderingPreview" aria-label="效果图 / 软装方案预览"></div>
                 </article>
               </div>
-              <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图，系统需要根据图纸与空间效果生成清单。</p>
+              <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图 / 软装方案，系统需要根据图纸与空间效果生成清单。</p>
             </section>
 
             <section class="generator-step project-info-step" aria-labelledby="projectInfoStepTitle">
