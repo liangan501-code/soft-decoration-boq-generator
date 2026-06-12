@@ -210,9 +210,17 @@ let activeLibraryCard = null;
 
 const elements = {
   projectTitle: document.querySelector("#projectTitle"),
+  currentProjectName: document.querySelector("#currentProjectName"),
   reportModeLabel: document.querySelector("#reportModeLabel"),
   projectMeta: document.querySelector("#projectMeta"),
-  projectSelect: document.querySelector("#projectSelect"),
+  projectSwitcher: document.querySelector("#projectSwitcher"),
+  projectMenuBtn: document.querySelector("#projectMenuBtn"),
+  projectMenuCurrent: document.querySelector("#projectMenuCurrent"),
+  projectDropdown: document.querySelector("#projectDropdown"),
+  projectDropdownList: document.querySelector("#projectDropdownList"),
+  dropdownNewProjectBtn: document.querySelector("#dropdownNewProjectBtn"),
+  sidebarProjectList: document.querySelector("#sidebarProjectList"),
+  sidebarNewProjectBtn: document.querySelector("#sidebarNewProjectBtn"),
   tableBody: document.querySelector("#boqTableBody"),
   totalBudget: document.querySelector("#totalBudget"),
   totalItems: document.querySelector("#totalItems"),
@@ -289,7 +297,7 @@ function normalizeWorkspace(value) {
 }
 
 function normalizeProject(project) {
-  return {
+  const normalized = {
     ...defaultProject(),
     ...project,
     id: project?.id || createId(),
@@ -300,6 +308,9 @@ function normalizeProject(project) {
     query: project?.query || "",
     items: Array.isArray(project?.items) ? project.items : [],
   };
+  normalized.area = normalizeArea(project?.area ?? extractArea(normalized.projectTitle));
+  normalized.style = project?.style || inferProjectStyle(normalized.projectTitle);
+  return normalized;
 }
 
 function getActiveProject() {
@@ -309,6 +320,37 @@ function getActiveProject() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
+}
+
+function extractArea(title) {
+  const match = String(title || "").match(/(\d+(?:\.\d+)?)\s*㎡/);
+  return match ? Number(match[1]) : "";
+}
+
+function normalizeArea(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : "";
+}
+
+function inferProjectStyle(title) {
+  const text = String(title || "");
+  return libraryStyles.find((style) => text.includes(style)) || "待定风格";
+}
+
+function getProjectArea(project) {
+  return normalizeArea(project.area ?? extractArea(project.projectTitle));
+}
+
+function getProjectStyle(project) {
+  return project.style || inferProjectStyle(project.projectTitle);
+}
+
+function getProjectTotal(project) {
+  return project.items.reduce((sum, item) => sum + subtotal(item), 0);
+}
+
+function cloneProjectItems(items) {
+  return items.map((item) => ({ ...item, id: createId() }));
 }
 
 function money(value) {
@@ -520,24 +562,27 @@ function getVisibleItems() {
 
 function render() {
   const visibleItems = getVisibleItems();
+  const total = getProjectTotal(state);
+  const area = getProjectArea(state);
+  const style = getProjectStyle(state);
+
   elements.projectTitle.textContent = state.projectTitle;
+  elements.currentProjectName.textContent = state.projectTitle;
+  elements.projectMenuCurrent.textContent = state.projectTitle;
   elements.reportModeLabel.textContent = state.exportMode === "internal" ? "软装全案 · 内部采购版" : "软装全案 · 客户汇报版";
-  elements.projectMeta.textContent = `${workspace.projects.length} 个项目 · 当前 ${state.items.length} 项清单`;
-  elements.projectSelect.innerHTML = workspace.projects
-    .map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.projectTitle)}</option>`)
-    .join("");
-  elements.projectSelect.value = state.id;
+  elements.projectMeta.textContent = `${workspace.projects.length} 个项目 · 当前 ${state.items.length} 项清单 · ${area ? `${area}㎡` : "面积待补充"} · ${style}`;
   elements.searchInput.value = state.query;
   elements.exportModeInput.value = state.exportMode || "client";
   elements.clearFilterBtn.hidden = !state.pendingOnly;
   elements.clientFieldsBtn.textContent = state.clientMode ? "客户版字段：已隐藏内部字段" : "客户版字段：全字段";
   document.body.classList.toggle("client-mode", state.clientMode);
 
+  renderProjectSwitcher();
+
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
     : '<tr><td colspan="12" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
-  const total = state.items.reduce((sum, item) => sum + subtotal(item), 0);
   const pendingTotal = state.items.filter((item) => PENDING_STATUSES.includes(item.status)).reduce((sum, item) => sum + subtotal(item), 0);
   const confirmed = state.items.filter((item) => item.status === "客户已确认").length;
   const score = state.items.length ? Math.round((confirmed / state.items.length) * 100) : 0;
@@ -548,6 +593,40 @@ function render() {
   elements.pendingAmount.textContent = money(pendingTotal);
   elements.purchaseScore.textContent = `${score}%`;
   renderTemplateLibrary();
+}
+
+function renderProjectSwitcher() {
+  const cards = workspace.projects.map(renderProjectCard).join("");
+  elements.projectDropdownList.innerHTML = cards;
+  elements.sidebarProjectList.innerHTML = cards;
+}
+
+function renderProjectCard(project) {
+  const isActive = project.id === state.id;
+  const area = getProjectArea(project);
+  const style = getProjectStyle(project);
+  const itemCount = project.items.length;
+  const total = getProjectTotal(project);
+  const safeId = escapeHtml(project.id);
+
+  return `
+    <article class="project-card ${isActive ? "is-active" : ""}" data-project-id="${safeId}">
+      <button class="project-card-main" type="button" data-project-action="switch" data-project-id="${safeId}" aria-current="${isActive ? "true" : "false"}">
+        <span class="project-card-kicker">${isActive ? "当前项目" : "点击切换"}</span>
+        <strong>${escapeHtml(project.projectTitle)}</strong>
+        <span class="project-card-meta">${area ? `${area}㎡` : "面积待补充"} · ${escapeHtml(style)}</span>
+      </button>
+      <dl class="project-card-stats">
+        <div><dt>清单</dt><dd>${itemCount} 项</dd></div>
+        <div><dt>总预算</dt><dd>${money(total)}</dd></div>
+      </dl>
+      <div class="project-card-actions" aria-label="项目操作">
+        <button type="button" data-project-action="switch" data-project-id="${safeId}">切换</button>
+        <button type="button" data-project-action="rename" data-project-id="${safeId}">重命名</button>
+        <button type="button" data-project-action="duplicate" data-project-id="${safeId}">复制</button>
+        <button class="danger" type="button" data-project-action="delete" data-project-id="${safeId}">删除</button>
+      </div>
+    </article>`;
 }
 
 function renderRow(item) {
@@ -687,13 +766,16 @@ function printClientPdf() {
 function addProject() {
   const name = window.prompt("请输入新项目名称", "新项目软装 BOQ 管理");
   if (!name?.trim()) return;
-  const project = { ...defaultProject(), projectTitle: name.trim(), items: [] };
+  const area = normalizeArea(window.prompt("请输入项目面积（㎡，可留空）", extractArea(name) || ""));
+  const style = window.prompt("请输入项目风格（可留空）", inferProjectStyle(name) === "待定风格" ? "" : inferProjectStyle(name))?.trim() || "待定风格";
+  const project = { ...defaultProject(), projectTitle: name.trim(), area, style, items: [] };
   workspace.projects.push(project);
   workspace.activeProjectId = project.id;
   state = project;
+  closeProjectMenu();
   saveState();
   render();
-  showToast("已新增并切换到空白项目");
+  showToast("已新增并自动切换到新项目");
 }
 
 function switchProject(projectId) {
@@ -701,9 +783,90 @@ function switchProject(projectId) {
   if (!nextProject) return;
   workspace.activeProjectId = projectId;
   state = nextProject;
+  closeProjectMenu();
   saveState();
   render();
   showToast(`已切换到「${state.projectTitle}」`);
+}
+
+function renameProject(projectId) {
+  const project = workspace.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  const nextName = window.prompt("请输入新的项目名称", project.projectTitle);
+  if (!nextName?.trim()) return;
+  const nextArea = normalizeArea(window.prompt("请输入项目面积（㎡，可留空）", getProjectArea(project) || ""));
+  const nextStyle = window.prompt("请输入项目风格（可留空）", getProjectStyle(project))?.trim() || "待定风格";
+  project.projectTitle = nextName.trim();
+  project.area = nextArea;
+  project.style = nextStyle;
+  saveState();
+  render();
+  showToast("已更新项目名称与基础信息");
+}
+
+function duplicateProject(projectId) {
+  const project = workspace.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  const copy = {
+    ...project,
+    id: createId(),
+    projectTitle: `${project.projectTitle} 副本`,
+    items: cloneProjectItems(project.items),
+  };
+  workspace.projects.push(copy);
+  workspace.activeProjectId = copy.id;
+  state = copy;
+  closeProjectMenu();
+  saveState();
+  render();
+  showToast("已复制项目并切换到副本");
+}
+
+function deleteProject(projectId) {
+  const project = workspace.projects.find((entry) => entry.id === projectId);
+  if (!project) return;
+  if (workspace.projects.length === 1) {
+    showToast("至少保留一个项目，无法删除最后一个项目");
+    return;
+  }
+  if (!window.confirm(`确认删除项目“${project.projectTitle}”？此操作不会保留该项目清单。`)) return;
+  workspace.projects = workspace.projects.filter((entry) => entry.id !== projectId);
+  if (workspace.activeProjectId === projectId) {
+    workspace.activeProjectId = workspace.projects[0].id;
+    state = workspace.projects[0];
+  }
+  closeProjectMenu();
+  saveState();
+  render();
+  showToast("已删除项目");
+}
+
+function handleProjectAction(event) {
+  const button = event.target.closest("[data-project-action]");
+  if (!button) return;
+  const { projectAction, projectId } = button.dataset;
+  if (projectAction === "switch") switchProject(projectId);
+  if (projectAction === "rename") renameProject(projectId);
+  if (projectAction === "duplicate") duplicateProject(projectId);
+  if (projectAction === "delete") deleteProject(projectId);
+}
+
+function openProjectMenu() {
+  elements.projectDropdown.hidden = false;
+  elements.projectMenuBtn.setAttribute("aria-expanded", "true");
+}
+
+function closeProjectMenu() {
+  elements.projectDropdown.hidden = true;
+  elements.projectMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+function toggleProjectMenu() {
+  if (elements.projectDropdown.hidden) {
+    openProjectMenu();
+  } else {
+    closeProjectMenu();
+  }
 }
 
 elements.tableBody.addEventListener("input", (event) => {
@@ -790,7 +953,17 @@ elements.templateLibraryPanel.addEventListener("click", (event) => {
   if (applyButton) applyLibraryTemplate();
 });
 elements.newProjectBtn.addEventListener("click", addProject);
-elements.projectSelect.addEventListener("change", (event) => switchProject(event.target.value));
+elements.dropdownNewProjectBtn.addEventListener("click", addProject);
+elements.sidebarNewProjectBtn.addEventListener("click", addProject);
+elements.projectMenuBtn.addEventListener("click", toggleProjectMenu);
+elements.projectDropdownList.addEventListener("click", handleProjectAction);
+elements.sidebarProjectList.addEventListener("click", handleProjectAction);
+document.addEventListener("click", (event) => {
+  if (!elements.projectSwitcher.contains(event.target)) closeProjectMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeProjectMenu();
+});
 elements.exportModeInput.addEventListener("change", (event) => {
   state.exportMode = event.target.value;
   state.clientMode = event.target.value === "client";

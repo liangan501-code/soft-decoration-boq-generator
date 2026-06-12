@@ -24,6 +24,13 @@
           <a href="#purchase">◈ 采购进度</a>
           <a href="#report">☷ 客户汇报</a>
         </nav>
+        <section class="sidebar-projects" aria-labelledby="sidebarProjectsTitle">
+          <div class="sidebar-projects-header">
+            <span id="sidebarProjectsTitle">项目总览</span>
+            <button type="button" id="sidebarNewProjectBtn" aria-label="新建项目">＋</button>
+          </div>
+          <div class="sidebar-project-list" id="sidebarProjectList"></div>
+        </section>
         <section class="side-card">
           <span class="side-icon">✧</span>
           <p>AI 已识别 7 项可降本替代品，预计不影响整体设计调性。</p>
@@ -36,12 +43,27 @@
           <div>
             <p class="eyebrow" id="reportModeLabel">软装全案 · 客户汇报版</p>
             <h1 id="projectTitle">滨江私宅 240㎡ 软装 BOQ 管理</h1>
+            <p class="current-project-line">当前项目：<strong id="currentProjectName">滨江私宅 240㎡ 软装 BOQ 管理</strong></p>
             <p class="project-meta" id="projectMeta">1 个项目 · 当前 0 项清单</p>
           </div>
           <div class="top-actions">
-            <label class="project-switcher" for="projectSelect">项目
-              <select id="projectSelect" aria-label="切换项目"></select>
-            </label>
+            <div class="project-switcher" id="projectSwitcher">
+              <button class="project-switcher-trigger" type="button" id="projectMenuBtn" aria-expanded="false" aria-controls="projectDropdown">
+                <span>项目</span>
+                <strong id="projectMenuCurrent">选择项目</strong>
+                <span class="chevron">⌄</span>
+              </button>
+              <div class="project-dropdown" id="projectDropdown" hidden>
+                <div class="project-dropdown-head">
+                  <div>
+                    <p class="eyebrow">Project Switch</p>
+                    <h3>项目列表 / 项目切换</h3>
+                  </div>
+                  <button class="mini-button" type="button" id="dropdownNewProjectBtn">＋ 新建</button>
+                </div>
+                <div class="project-dropdown-list" id="projectDropdownList"></div>
+              </div>
+            </div>
             <label class="search" for="searchInput">⌕ <input id="searchInput" type="search" placeholder="搜索空间、品类、供应商" /></label>
             <button class="ghost-button" type="button" id="newProjectBtn">＋ 新建项目</button>
             <button class="ghost-button" type="button" id="importBtn">⇧ 导入清单</button>
