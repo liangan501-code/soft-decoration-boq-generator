@@ -8,7 +8,7 @@ function createId() {
 }
 
 const PENDING_STATUSES = ["待确认", "采购询价中", "需复核尺寸"];
-const REQUIRED_UPLOAD_MESSAGE = "请先上传平面图和效果图，系统需要根据图纸与空间效果生成清单。";
+const REQUIRED_UPLOAD_MESSAGE = "请先上传平面图和效果图 / 软装方案，系统需要根据图纸与空间效果生成清单。";
 const PROJECT_SUBTYPES = {
   家装: ["私宅", "大平层", "别墅", "复式", "公寓"],
   工装: ["样板间", "售楼处", "会所", "酒店", "办公空间", "商业公区"],
@@ -17,8 +17,17 @@ const RESIDENTIAL_SPACES = ["客厅", "餐厅", "主卧", "次卧", "玄关", "�
 const COMMERCIAL_SPACES = ["样板间", "售楼处", "洽谈区", "沙盘区", "VIP室", "会所休闲区", "公区"];
 const UPLOAD_COLLECTIONS = {
   floorPlans: { label: "平面图", status: "floorPlanUploadStatus", preview: "floorPlanPreview" },
-  renderings: { label: "效果图", status: "renderingUploadStatus", preview: "renderingPreview" },
+  renderings: { label: "效果图 / 软装方案", status: "renderingUploadStatus", preview: "renderingPreview" },
 };
+const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
+const MAX_IMAGE_FILE_SIZE = 25 * 1024 * 1024;
+const LARGE_IMAGE_SIZE = 2 * 1024 * 1024;
+const IMAGE_PREVIEW_MAX_EDGE = 1800;
+const IMAGE_PREVIEW_QUALITY = 0.86;
+const IMAGE_DB_NAME = "maison-boq-images-v1";
+const IMAGE_STORE_NAME = "images";
+const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，已尝试改用 IndexedDB 保存图片预览。";
 
 const defaultProject = () => ({
   id: createId(),
@@ -708,12 +717,15 @@ function normalizeAttachments(attachments = {}) {
 
 function normalizeAttachmentList(list = []) {
   return Array.isArray(list)
-    ? list.filter((file) => file?.dataUrl).map((file) => ({
+    ? list.filter((file) => file?.dataUrl || file?.storageKey).map((file) => ({
       id: file.id || createId(),
       name: file.name || "未命名图片",
       type: file.type || "image/*",
       size: Number(file.size || 0),
-      dataUrl: file.dataUrl,
+      dataUrl: file.dataUrl || "",
+      storageKey: file.storageKey || "",
+      storage: file.storage || "localStorage",
+      storageNotice: file.storageNotice || "",
       uploadedAt: file.uploadedAt || new Date().toISOString(),
     }))
     : [];
@@ -739,14 +751,142 @@ function createPersistedWorkspace() {
       style: project.style || "待定风格",
       targetBudget: Number(project.targetBudget || 0),
       remark: project.remark || "",
-      attachments: normalizeAttachments(project.attachments),
+      attachments: createPersistedAttachments(project.attachments),
       items: project.items.map(normalizeItem),
     })),
   };
 }
 
+
+function createPersistedAttachments(attachments = {}) {
+  const normalized = normalizeAttachments(attachments);
+  Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
+    normalized[collection] = normalized[collection].map((file) => (
+      file.storage === "indexedDB" && file.storageKey ? { ...file, dataUrl: "" } : file
+    ));
+  });
+  return normalized;
+}
+
+function buildImageStorageKey(projectId, collection, imageId) {
+  return `${projectId || "project"}:${collection}:${imageId}`;
+}
+
+function openImageDb() {
+  return new Promise((resolve, reject) => {
+    if (!globalThis.indexedDB) {
+      reject(new Error("当前浏览器不支持 IndexedDB"));
+      return;
+    }
+    const request = indexedDB.open(IMAGE_DB_NAME, 1);
+    request.addEventListener("upgradeneeded", () => {
+      request.result.createObjectStore(IMAGE_STORE_NAME);
+    });
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("IndexedDB 打开失败")));
+  });
+}
+
+async function withImageStore(mode, callback) {
+  const db = await openImageDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(IMAGE_STORE_NAME, mode);
+    const store = transaction.objectStore(IMAGE_STORE_NAME);
+    let request;
+    try {
+      request = callback(store);
+    } catch (error) {
+      reject(error);
+      db.close();
+      return;
+    }
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("IndexedDB 操作失败")));
+    transaction.addEventListener("complete", () => db.close());
+    transaction.addEventListener("abort", () => {
+      db.close();
+      reject(transaction.error || new Error("IndexedDB 写入中断"));
+    });
+  });
+}
+
+function saveImageToIndexedDb(key, dataUrl) {
+  return withImageStore("readwrite", (store) => store.put(dataUrl, key));
+}
+
+function readImageFromIndexedDb(key) {
+  return withImageStore("readonly", (store) => store.get(key));
+}
+
+function deleteImageFromIndexedDb(key) {
+  return withImageStore("readwrite", (store) => store.delete(key));
+}
+
+function markWorkspaceImageAsIndexedDb(projectId, collection, imageId, storageKey) {
+  const project = workspace.projects.find((entry) => entry.id === projectId);
+  const file = project?.attachments?.[collection]?.find((entry) => entry.id === imageId);
+  if (!file) return;
+  file.storageKey = storageKey;
+  file.storage = "indexedDB";
+  file.storageNotice = "已保存预览图";
+}
+
+async function hydrateWorkspaceFromIndexedDb() {
+  const imageFiles = workspace.projects.flatMap((project) => Object.keys(UPLOAD_COLLECTIONS).flatMap((collection) => (
+    (project.attachments?.[collection] || []).filter((file) => file.storageKey && !file.dataUrl)
+  )));
+  if (!imageFiles.length) return;
+  const results = await Promise.allSettled(imageFiles.map((file) => readImageFromIndexedDb(file.storageKey)));
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled" && result.value) imageFiles[index].dataUrl = result.value;
+  });
+  renderUploadPreviews();
+}
+
+function safeShowToast(message) {
+  const toastElement = document.querySelector("#toast");
+  if (!toastElement) return;
+  toastElement.textContent = message;
+  toastElement.classList.add("is-visible");
+  window.clearTimeout(toastElement.hideTimer);
+  toastElement.hideTimer = window.setTimeout(() => toastElement.classList.remove("is-visible"), 3200);
+}
+
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedWorkspace()));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedWorkspace()));
+    return true;
+  } catch (error) {
+    console.warn("本地存储空间不足，准备改用 IndexedDB 保存图片", error);
+    const fallbackWorkspace = createPersistedWorkspace();
+    const saveJobs = [];
+    fallbackWorkspace.projects.forEach((project) => {
+      Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
+        project.attachments[collection] = (project.attachments[collection] || []).map((file) => {
+          if (!file.dataUrl) return file;
+          const storageKey = file.storageKey || buildImageStorageKey(project.id, collection, file.id);
+          markWorkspaceImageAsIndexedDb(project.id, collection, file.id, storageKey);
+          saveJobs.push(saveImageToIndexedDb(storageKey, file.dataUrl));
+          return { ...file, dataUrl: "", storageKey, storage: "indexedDB", storageNotice: "已保存预览图" };
+        });
+      });
+    });
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackWorkspace));
+      hydrateWorkspaceFromIndexedDb();
+      Promise.allSettled(saveJobs).then((results) => {
+        if (results.some((result) => result.status === "rejected")) {
+          safeShowToast("浏览器存储空间不足，部分图片未能保存，请压缩后重新上传");
+        }
+      });
+      safeShowToast(STORAGE_WARNING_MESSAGE);
+      return true;
+    } catch (fallbackError) {
+      console.error("无法保存项目数据", fallbackError);
+      safeShowToast("浏览器存储空间不足，请删除部分图片或压缩后重新上传");
+      return false;
+    }
+  }
 }
 
 function flushInlineEditSave() {
@@ -948,7 +1088,7 @@ function buildClientNote(context, style, space) {
 function getUploadSummary() {
   const floorCount = state.attachments?.floorPlans?.length || 0;
   const renderingCount = state.attachments?.renderings?.length || 0;
-  return `${floorCount} 张平面图与 ${renderingCount} 张效果图`;
+  return `${floorCount} 张平面图与 ${renderingCount} 张效果图 / 软装方案`;
 }
 
 function generateItemsForSpaceAndStyle(space, style) {
@@ -1221,7 +1361,7 @@ function updateGeneratorAvailability() {
     : REQUIRED_UPLOAD_MESSAGE;
   elements.uploadRequirementText.classList.toggle("is-ready", ready);
   elements.aiGeneratorHint.textContent = ready
-    ? "系统将结合平面图、效果图、项目类型与风格生成软装 BOQ。"
+    ? "系统将结合平面图、效果图 / 软装方案、项目类型与风格生成软装 BOQ。"
     : REQUIRED_UPLOAD_MESSAGE;
 }
 
@@ -1237,57 +1377,142 @@ function renderUploadCollection(collection) {
   const status = elements[config.status];
   if (!preview || !status) return;
   status.textContent = files.length ? `已上传 ${files.length} 张` : "未上传";
-  preview.innerHTML = files.map((file) => `
-    <figure class="upload-thumb">
-      <img src="${escapeHtml(file.dataUrl)}" alt="${escapeHtml(file.name)}" />
-      <figcaption title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</figcaption>
-      <button type="button" class="thumb-remove" data-upload-remove="${collection}" data-upload-id="${escapeHtml(file.id)}" aria-label="删除${escapeHtml(file.name)}">×</button>
-    </figure>
-  `).join("");
+  preview.innerHTML = files.map((file) => {
+    const notice = file.storageNotice ? `<span class="upload-thumb-notice">${escapeHtml(file.storageNotice)}</span>` : "";
+    const imageMarkup = file.dataUrl
+      ? `<img src="${escapeHtml(file.dataUrl)}" alt="${escapeHtml(file.name)}" />`
+      : `<div class="upload-thumb-placeholder">预览加载中</div>`;
+    return `
+      <figure class="upload-thumb">
+        ${imageMarkup}
+        <figcaption title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</figcaption>
+        ${notice}
+        <button type="button" class="thumb-remove" data-upload-remove="${collection}" data-upload-id="${escapeHtml(file.id)}" aria-label="删除${escapeHtml(file.name)}">删除</button>
+      </figure>
+    `;
+  }).join("");
 }
 
-function handleUploadFiles(collection, fileList) {
-  const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
-  if (!files.length) {
-    showToast("请选择图片文件上传");
-    return;
-  }
-  Promise.all(files.map(readImageFile)).then((uploadedFiles) => {
+async function handleUploadFiles(collection, fileList) {
+  const selectedFiles = Array.from(fileList || []);
+  if (!selectedFiles.length) return;
+  const results = await Promise.allSettled(selectedFiles.map(readImageFile));
+  const uploadedFiles = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason?.message || "读取失败，请重新上传");
+  if (uploadedFiles.length) {
     state.attachments = normalizeAttachments(state.attachments);
+    uploadedFiles.forEach((file) => {
+      file.storageKey = buildImageStorageKey(state.id, collection, file.id);
+      saveImageToIndexedDb(file.storageKey, file.dataUrl).catch((error) => console.warn("IndexedDB 图片保存失败", error));
+    });
     state.attachments[collection] = [...state.attachments[collection], ...uploadedFiles];
     saveState();
     renderUploadPreviews();
     updateGeneratorAvailability();
-    showToast(`已上传 ${uploadedFiles.length} 张${UPLOAD_COLLECTIONS[collection].label}`);
-  }).catch((error) => {
-    console.warn("图片上传失败", error);
-    showToast("图片读取失败，请重新上传");
-  });
+  }
+  if (failures.length) {
+    showToast([...new Set(failures)].join("；"));
+    return;
+  }
+  const previewNotice = uploadedFiles.some((file) => file.storageNotice) ? "，较大图片已保存预览图" : "";
+  showToast(`已上传 ${uploadedFiles.length} 张${UPLOAD_COLLECTIONS[collection].label}${previewNotice}`);
+}
+
+function validateImageFile(file) {
+  const hasSupportedType = SUPPORTED_IMAGE_TYPES.has(file.type);
+  const hasSupportedExtension = SUPPORTED_IMAGE_EXTENSIONS.test(file.name || "");
+  if (!hasSupportedType && !hasSupportedExtension) {
+    throw new Error(`${file.name || "图片"} 格式不支持，请上传 JPG、JPEG、PNG 或 WebP`);
+  }
+  if (file.size > MAX_IMAGE_FILE_SIZE) {
+    throw new Error(`${file.name || "图片"} 图片过大，请压缩到 25MB 以内后重新上传`);
+  }
 }
 
 function readImageFile(file) {
   return new Promise((resolve, reject) => {
+    try {
+      validateImageFile(file);
+    } catch (error) {
+      reject(error);
+      return;
+    }
     const reader = new FileReader();
-    reader.addEventListener("load", () => resolve({
-      id: createId(),
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      dataUrl: String(reader.result || ""),
-      uploadedAt: new Date().toISOString(),
-    }));
-    reader.addEventListener("error", reject);
+    reader.addEventListener("load", async () => {
+      const originalDataUrl = String(reader.result || "");
+      if (!originalDataUrl.startsWith("data:image/")) {
+        reject(new Error(`${file.name || "图片"} 读取失败，请重新上传`));
+        return;
+      }
+      try {
+        const dataUrl = file.size >= LARGE_IMAGE_SIZE ? await compressImageDataUrl(originalDataUrl, file.type) : originalDataUrl;
+        resolve({
+          id: createId(),
+          name: file.name,
+          type: file.type || inferImageType(file.name),
+          size: file.size,
+          dataUrl,
+          storageNotice: dataUrl !== originalDataUrl ? "已保存预览图" : "",
+          uploadedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.warn("图片压缩失败，使用原图预览", error);
+        resolve({
+          id: createId(),
+          name: file.name,
+          type: file.type || inferImageType(file.name),
+          size: file.size,
+          dataUrl: originalDataUrl,
+          uploadedAt: new Date().toISOString(),
+        });
+      }
+    });
+    reader.addEventListener("error", () => reject(new Error(`${file.name || "图片"} 读取失败，请重新上传`)));
+    reader.addEventListener("abort", () => reject(new Error(`${file.name || "图片"} 读取已取消，请重新上传`)));
     reader.readAsDataURL(file);
+  });
+}
+
+function inferImageType(name = "") {
+  if (/\.png$/i.test(name)) return "image/png";
+  if (/\.webp$/i.test(name)) return "image/webp";
+  return "image/jpeg";
+}
+
+function compressImageDataUrl(dataUrl, type) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => {
+      const scale = Math.min(1, IMAGE_PREVIEW_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+      if (scale >= 1) {
+        resolve(dataUrl);
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("无法压缩图片"));
+        return;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL(type === "image/png" ? "image/png" : "image/jpeg", IMAGE_PREVIEW_QUALITY));
+    });
+    image.addEventListener("error", () => reject(new Error("读取失败，请重新上传")));
+    image.src = dataUrl;
   });
 }
 
 function removeUploadedImage(collection, id) {
   state.attachments = normalizeAttachments(state.attachments);
+  const removed = state.attachments[collection].find((file) => file.id === id);
   state.attachments[collection] = state.attachments[collection].filter((file) => file.id !== id);
+  if (removed?.storageKey) deleteImageFromIndexedDb(removed.storageKey).catch((error) => console.warn("删除 IndexedDB 图片失败", error));
   saveState();
   renderUploadPreviews();
   updateGeneratorAvailability();
-  showToast("已删除上传图片");
+  showToast(`${UPLOAD_COLLECTIONS[collection].label}已删除`);
 }
 
 function getAllSpacesForCurrentProject() {
@@ -1773,6 +1998,21 @@ document.querySelectorAll("[data-upload-trigger]").forEach((trigger) => {
     const collection = trigger.dataset.uploadTrigger;
     (collection === "floorPlans" ? elements.floorPlanInput : elements.renderingInput).click();
   });
+  ["dragenter", "dragover"].forEach((eventName) => {
+    trigger.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      trigger.classList.add("is-dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((eventName) => {
+    trigger.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      trigger.classList.remove("is-dragover");
+    });
+  });
+  trigger.addEventListener("drop", (event) => {
+    handleUploadFiles(trigger.dataset.uploadTrigger, event.dataTransfer?.files);
+  });
 });
 elements.floorPlanInput.addEventListener("change", (event) => {
   handleUploadFiles("floorPlans", event.target.files);
@@ -1892,4 +2132,5 @@ elements.searchInput.addEventListener("input", (event) => {
 elements.showSuggestionsBtn.addEventListener("click", () => elements.suggestionDialog.showModal());
 elements.closeSuggestionBtn.addEventListener("click", () => elements.suggestionDialog.close());
 
+hydrateWorkspaceFromIndexedDb().catch((error) => console.warn("IndexedDB 图片恢复失败", error));
 render();
