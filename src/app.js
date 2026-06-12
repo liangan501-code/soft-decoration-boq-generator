@@ -213,6 +213,90 @@ const styleProductNames = {
   },
 };
 
+
+const BOQ_TEMPLATES = {
+  奶油风: {
+    客厅: [
+      {
+        category: "主沙发",
+        name: "奶油柔模块沙发",
+        specs: "常见尺寸：3200 × 980 × 720mm；材质：羊羔绒、微水泥、浅橡木；颜色：奶油白、杏仁米、暖咖",
+        quantity: 1,
+        unit: "套",
+        suggestedPrice: "¥32,000 - ¥68,000",
+        unitPrice: 50000,
+        supplier: "Cream Atelier",
+        status: "待确认",
+        internalNote: "奶油风客厅核心单品，建议选择圆角模块与低饱和暖白面料。",
+      },
+      {
+        category: "茶几",
+        name: "奶油系弧形茶几",
+        specs: "常见尺寸：Φ900 × 360mm + Φ600 × 420mm；材质：微水泥、浅橡木、哑光烤漆；颜色：奶油白/杏仁米",
+        quantity: 1,
+        unit: "组",
+        suggestedPrice: "¥6,800 - ¥18,000",
+        unitPrice: 12400,
+        supplier: "Cream Atelier",
+        status: "待确认",
+        internalNote: "建议与奶油柔模块沙发保持圆润线条呼应。",
+      },
+      {
+        category: "地毯",
+        name: "奶油羊毛地毯",
+        specs: "常见尺寸：2400 × 3400mm；材质：羊毛混纺、短绒；颜色：奶油白、暖米色",
+        quantity: 1,
+        unit: "张",
+        suggestedPrice: "¥7,500 - ¥22,000",
+        unitPrice: 14750,
+        supplier: "Cream Atelier",
+        status: "待确认",
+        internalNote: "建议选短绒易清洁材质，强化同色系层次。",
+      },
+    ],
+  },
+  中古风: {
+    客厅: [
+      {
+        category: "沙发",
+        name: "中古胡桃木框架沙发",
+        specs: "常见尺寸：3200 × 980 × 720mm；材质：胡桃木框架、复古皮革/羊毛混纺；颜色：胡桃木色、焦糖棕、橄榄绿",
+        quantity: 1,
+        unit: "套",
+        suggestedPrice: "¥32,000 - ¥68,000",
+        unitPrice: 45000,
+        supplier: "Mid-Century Gallery",
+        status: "待确认",
+        internalNote: "中古风客厅核心单品，建议搭配胡桃木茶几和复古金属落地灯。",
+      },
+      {
+        category: "茶几",
+        name: "胡桃木复古茶几",
+        specs: "常见尺寸：1200 × 700 × 380mm；材质：胡桃木、藤编、复古五金；颜色：胡桃木色/焦糖棕",
+        quantity: 1,
+        unit: "张",
+        suggestedPrice: "¥8,000 - ¥22,000",
+        unitPrice: 14800,
+        supplier: "Mid-Century Gallery",
+        status: "待确认",
+        internalNote: "建议与中古沙发形成材质呼应。",
+      },
+      {
+        category: "地毯",
+        name: "中古感羊毛手工地毯",
+        specs: "常见尺寸：3000 × 4000mm；材质：羊毛、低饱和复古纹样；颜色：驼色、橄榄绿、焦糖棕",
+        quantity: 1,
+        unit: "张",
+        suggestedPrice: "¥12,000 - ¥28,000",
+        unitPrice: 18600,
+        supplier: "Mid-Century Gallery",
+        status: "待确认",
+        internalNote: "建议选低饱和复古纹样，增强空间层次。",
+      },
+    ],
+  },
+};
+
 const styleSpaceTemplateOverrides = {
   中古风: {
     客厅: [
@@ -550,7 +634,29 @@ function resolveProductName(style, category, baseName) {
   return styleProductNames[style]?.[category] || `${styleProfiles[style]?.adjective || "风格化"}${baseName}`;
 }
 
+function mapExplicitTemplateItem(space, item) {
+  return {
+    id: createId(),
+    space,
+    category: item.category,
+    name: item.name,
+    spec: item.specs,
+    quantity: item.quantity,
+    unit: item.unit || "件",
+    unitPrice: Number(item.unitPrice || 0),
+    priceRange: item.suggestedPrice || "",
+    supplier: item.supplier,
+    status: item.status || "待确认",
+    note: item.internalNote || "",
+  };
+}
+
 function buildTemplateItems(space, style) {
+  const explicitTemplates = BOQ_TEMPLATES[style]?.[space];
+  if (explicitTemplates?.length) {
+    return explicitTemplates.map((item) => mapExplicitTemplateItem(space, item));
+  }
+
   const profile = styleProfiles[style] || styleProfiles.奶油风;
   const templates = getTemplateRows(space, style);
   return templates.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => ({
@@ -569,14 +675,44 @@ function buildTemplateItems(space, style) {
   }));
 }
 
-function applyGeneratedItems(generatedItems, message, spacesToReplace = []) {
+function generateItemsForSpaceAndStyle(space, style) {
+  return buildTemplateItems(space, style);
+}
+
+function replaceItemsForSpaces(generatedItems, replaceSpaces) {
+  const firstReplaceIndex = state.items.findIndex((item) => replaceSpaces.has(item.space));
+  const existingItems = state.items.filter((item) => !replaceSpaces.has(item.space));
+
+  if (firstReplaceIndex < 0) {
+    return [...existingItems, ...generatedItems];
+  }
+
+  const insertIndex = Math.min(firstReplaceIndex, existingItems.length);
+  return [
+    ...existingItems.slice(0, insertIndex),
+    ...generatedItems,
+    ...existingItems.slice(insertIndex),
+  ];
+}
+
+function validateGeneratedTemplateResult(spaces, style) {
+  if (style !== "中古风" || !spaces.includes("客厅")) return;
+  const firstLivingRoomItem = state.items.find((item) => item.space === "客厅");
+  console.assert(
+    firstLivingRoomItem?.name.includes("中古胡桃木框架沙发"),
+    "调试验证失败：客厅 + 中古风生成后，客厅第一项应为中古胡桃木框架沙发，而不是奶油柔模块沙发。",
+  );
+}
+
+function applyGeneratedItems(generatedItems, message, spacesToReplace = [], style = "", generatedSpaces = []) {
   const replaceSpaces = new Set(spacesToReplace);
-  const existingItems = replaceSpaces.size ? state.items.filter((item) => !replaceSpaces.has(item.space)) : state.items;
-  state.items = [...existingItems, ...generatedItems];
+  state.items = replaceSpaces.size ? replaceItemsForSpaces(generatedItems, replaceSpaces) : [...state.items, ...generatedItems];
+  if (style) state.style = style;
   pendingOnly = false;
   query = "";
   saveState();
   render();
+  validateGeneratedTemplateResult(generatedSpaces, style);
   document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
   showToast(message);
 }
@@ -607,46 +743,47 @@ async function getGenerationAction(spaces, scopeLabel) {
   return requestTemplateConflictAction(`${scopeLabel}已有清单，是否替换为新的风格模板？`);
 }
 
-async function generateTemplate() {
-  const space = elements.templateSpaceInput.value;
+async function runTemplateGeneration({ spaces, scopeLabel, cancelMessage, successMessage }) {
   const style = elements.templateStyleInput.value;
-  const action = await getGenerationAction([space], "当前空间");
+  const action = await getGenerationAction(spaces, scopeLabel);
   if (action === "取消") {
-    showToast("已取消生成，当前清单未改变");
+    showToast(cancelMessage);
     return;
   }
 
-  const generatedItems = buildTemplateItems(space, style);
-  const spacesToReplace = action === "替换" ? [space] : [];
-  applyGeneratedItems(generatedItems, `已${action} ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`, spacesToReplace);
+  const generatedItems = spaces.flatMap((space) => generateItemsForSpaceAndStyle(space, style));
+  const spacesToReplace = action === "替换" ? spaces : [];
+  applyGeneratedItems(generatedItems, successMessage(action, style, generatedItems), spacesToReplace, style, spaces);
+}
+
+async function generateTemplate() {
+  const space = elements.templateSpaceInput.value;
+  await runTemplateGeneration({
+    spaces: [space],
+    scopeLabel: "当前空间",
+    cancelMessage: "已取消生成，当前清单未改变",
+    successMessage: (action, style, generatedItems) => `已${action} ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`,
+  });
 }
 
 async function generateAllSpacesTemplate() {
-  const style = elements.templateStyleInput.value;
   const spaces = Object.keys(spaceTemplates);
-  const action = await getGenerationAction(spaces, "当前项目空间");
-  if (action === "取消") {
-    showToast("已取消一键生成，当前清单未改变");
-    return;
-  }
-
-  const generatedItems = spaces.flatMap((space) => buildTemplateItems(space, style));
-  const spacesToReplace = action === "替换" ? spaces : [];
-  applyGeneratedItems(generatedItems, `已${action} ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`, spacesToReplace);
+  await runTemplateGeneration({
+    spaces,
+    scopeLabel: "当前项目空间",
+    cancelMessage: "已取消一键生成，当前清单未改变",
+    successMessage: (action, style, generatedItems) => `已${action} ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`,
+  });
 }
 
 async function applyLibraryTemplate() {
   const space = elements.templateSpaceInput.value;
-  const style = elements.templateStyleInput.value;
-  const action = await getGenerationAction([space], "当前空间");
-  if (action === "取消") {
-    showToast("已取消应用模板库，当前清单未改变");
-    return;
-  }
-
-  const generatedItems = buildTemplateItems(space, style);
-  const spacesToReplace = action === "替换" ? [space] : [];
-  applyGeneratedItems(generatedItems, `已${action}模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`, spacesToReplace);
+  await runTemplateGeneration({
+    spaces: [space],
+    scopeLabel: "当前空间",
+    cancelMessage: "已取消应用模板库，当前清单未改变",
+    successMessage: (action, style, generatedItems) => `已${action}模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`,
+  });
 }
 
 function setLibraryCard(card) {
