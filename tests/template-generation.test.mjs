@@ -40,5 +40,27 @@ test("current-space generation asks whether to replace append or cancel existing
 
 test("all-spaces generation uses the selected style for every generated space", () => {
   assert.match(source, /const style = elements\.templateStyleInput\.value;/);
-  assert.match(source, /spaces\.flatMap\(\(space\) => buildTemplateItems\(space, style\)\)/);
+  assert.match(source, /spaces\.flatMap\(\(space\) => generateItemsForSpaceAndStyle\(space, style\)\)/);
+});
+
+
+test("generation uses explicit BOQ_TEMPLATES and preserves replacement position", () => {
+  assert.match(source, /const BOQ_TEMPLATES = {/);
+  assert.match(source, /function generateItemsForSpaceAndStyle\(space, style\)/);
+  assert.match(source, /BOQ_TEMPLATES\[style\]\?\.\[space\]/);
+  assert.match(source, /function replaceItemsForSpaces\(generatedItems, replaceSpaces\)/);
+  assert.match(source, /function validateGeneratedTemplateResult\(spaces, style\)/);
+  assert.match(source, /firstLivingRoomItem\?\.name\.includes\("中古胡桃木框架沙发"\)/);
+  assert.match(source, /firstReplaceIndex/);
+  assert.match(source, /existingItems\.slice\(0, insertIndex\)/);
+});
+
+test("mid-century living room template cannot fall back to cream sofa", () => {
+  const templateStart = source.indexOf("const BOQ_TEMPLATES");
+  const midCenturyStart = source.indexOf("中古风: {", templateStart);
+  const midCenturyLivingRoom = source.slice(midCenturyStart, source.indexOf("const styleSpaceTemplateOverrides"));
+  assert.match(midCenturyLivingRoom, /name: "中古胡桃木框架沙发"/);
+  assert.match(midCenturyLivingRoom, /name: "胡桃木复古茶几"/);
+  assert.match(midCenturyLivingRoom, /name: "中古感羊毛手工地毯"/);
+  assert.doesNotMatch(midCenturyLivingRoom, /name: "奶油柔模块沙发"/);
 });
