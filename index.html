@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>软装 BOQ 设计师后台</title>
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <div class="brand-mark">◒</div>
+          <div>
+            <strong>Maison BOQ</strong>
+            <span>软装设计后台</span>
+          </div>
+        </div>
+        <nav class="nav-list">
+          <a class="active" href="#overview">⌘ 项目总览</a>
+          <a href="#scheme">✦ 方案与色板</a>
+          <a href="#boq">▦ 清单与预算</a>
+          <a href="#purchase">◈ 采购进度</a>
+          <a href="#report">☷ 客户汇报</a>
+        </nav>
+        <section class="side-card">
+          <span class="side-icon">✧</span>
+          <p>AI 已识别 7 项可降本替代品，预计不影响整体设计调性。</p>
+          <button>查看优化建议</button>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">软装全案 · 客户汇报版</p>
+            <h1>滨江私宅 240㎡ 软装 BOQ 管理</h1>
+          </div>
+          <div class="top-actions">
+            <div class="search">⌕ <span>搜索空间、品类、供应商</span></div>
+            <button class="icon-button" aria-label="通知">⌁</button>
+            <button class="ghost-button">⇧ 导入清单</button>
+            <button class="primary-button">⇩ 导出汇报表</button>
+          </div>
+        </header>
+
+        <section class="hero-panel" id="overview">
+          <div class="hero-copy">
+            <span class="pill">✓ 方案深化中 · 采购前复核</span>
+            <h2>以设计逻辑组织预算，让客户看得懂，也让采购能直接执行。</h2>
+            <p>将空间、品类、规格、数量、供应商、预算与状态集中管理，支持客户汇报、内部核价、采购跟进三种使用场景。</p>
+            <div class="hero-actions">
+              <button class="primary-button">生成客户版 PDF</button>
+              <button class="secondary-button">筛选待确认项</button>
+            </div>
+          </div>
+          <div class="mood-board" id="scheme" aria-label="软装情绪板">
+            <div class="swatch linen">亚麻米</div>
+            <div class="swatch walnut">胡桃木</div>
+            <div class="swatch brass">香槟金</div>
+            <div class="swatch stone">洞石灰</div>
+          </div>
+        </section>
+
+        <section class="metrics-grid" aria-label="项目关键指标">
+          <article class="metric-card gold">
+            <p>项目总预算</p>
+            <strong>¥ 486,200</strong>
+            <span>较初稿节省 8.6%</span>
+          </article>
+          <article class="metric-card sand">
+            <p>已确认品类</p>
+            <strong>128 项</strong>
+            <span>家具 / 灯具 / 布艺</span>
+          </article>
+          <article class="metric-card sage">
+            <p>待采购金额</p>
+            <strong>¥ 318,740</strong>
+            <span>含 12 项替代方案</span>
+          </article>
+          <article class="metric-card ink">
+            <p>预计交付周期</p>
+            <strong>32 天</strong>
+            <span>软装进场倒计时</span>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <article class="panel boq-panel" id="boq">
+            <div class="panel-header">
+              <div>
+                <p class="eyebrow">Bill of Quantities</p>
+                <h3>软装清单明细</h3>
+              </div>
+              <button class="ghost-button">客户版字段⌄</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>空间</th>
+                    <th>品类</th>
+                    <th>产品名称 / 材质说明</th>
+                    <th>规格与配置</th>
+                    <th>数量</th>
+                    <th>供应商</th>
+                    <th>预算小计</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><strong>客厅</strong></td>
+                    <td>主沙发</td>
+                    <td class="item-cell">意式低靠背模块沙发 / 暖灰羊毛混纺</td>
+                    <td>3200 × 980 × 680mm，含抱枕 4 只</td>
+                    <td>1 套</td>
+                    <td>Maison&Co 定制工厂</td>
+                    <td class="money">¥ 42,800</td>
+                    <td><span class="status confirmed">客户已确认</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>餐厅</strong></td>
+                    <td>吊灯</td>
+                    <td class="item-cell">手工玻璃线性吊灯 / 香槟金金属件</td>
+                    <td>L1800mm，3000K 暖光，支持调光</td>
+                    <td>1 组</td>
+                    <td>北欧灯饰精选</td>
+                    <td class="money">¥ 16,500</td>
+                    <td><span class="status pending">采购询价中</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>主卧</strong></td>
+                    <td>窗帘</td>
+                    <td class="item-cell">双层遮光帘 + 纱帘 / 杏仁米色</td>
+                    <td>墙到墙安装，遮光率 92%，含轨道</td>
+                    <td>28 米</td>
+                    <td>织物实验室</td>
+                    <td class="money">¥ 24,360</td>
+                    <td><span class="status review">需复核尺寸</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>玄关</strong></td>
+                    <td>艺术品</td>
+                    <td class="item-cell">抽象肌理画 / 原创手作装裱</td>
+                    <td>900 × 1200mm，胡桃木窄边框</td>
+                    <td>1 幅</td>
+                    <td>Gallery 19</td>
+                    <td class="money">¥ 9,800</td>
+                    <td><span class="status option">备选推荐</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>书房</strong></td>
+                    <td>单椅</td>
+                    <td class="item-cell">皮革阅读椅 / 焦糖棕植鞣皮</td>
+                    <td>含脚踏，黑钛金属脚，现货交付</td>
+                    <td>1 把</td>
+                    <td>HABITAT 买手店</td>
+                    <td class="money">¥ 13,900</td>
+                    <td><span class="status confirmed">客户已确认</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <aside class="panel insight-panel" id="purchase">
+            <div class="panel-header compact">
+              <div>
+                <p class="eyebrow">采购节奏</p>
+                <h3>关键节点</h3>
+              </div>
+              <span class="calendar-icon">◷</span>
+            </div>
+            <div class="timeline">
+              <div class="timeline-item">
+                <time>06/14</time>
+                <div>
+                  <strong>客户汇报会</strong>
+                  <p>输出带效果参考、预算拆分和采购优先级的正式 BOQ。</p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <time>06/18</time>
+                <div>
+                  <strong>供应商比价截止</strong>
+                  <p>收齐主材、灯具、布艺三类报价并锁定可替换项。</p>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <time>06/25</time>
+                <div>
+                  <strong>首批采购下单</strong>
+                  <p>优先处理定制周期较长的家具与窗帘品类。</p>
+                </div>
+              </div>
+            </div>
+            <div class="purchase-card">
+              <span>✓</span>
+              <div>
+                <strong>采购可执行度 86%</strong>
+                <p>规格字段完整，仍有 3 项需补充安装条件与现场尺寸。</p>
+              </div>
+            </div>
+          </aside>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
