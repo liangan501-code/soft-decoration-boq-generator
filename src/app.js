@@ -939,8 +939,38 @@ function recommendedUnitPrice(range) {
   return Math.round((Number(min) + Number(max)) / 2);
 }
 
-function getTemplateRows(space, style) {
-  return styleSpaceTemplateOverrides[style]?.[space] || spaceTemplates[space] || spaceTemplates.客厅;
+function getContextualTemplateRows(space, style, context = getGenerationContext()) {
+  if (context.projectCategory === "工装" && context.projectSubtype === "样板间" && style === "轻奢风" && space === "客厅") {
+    return [
+      ["沙发", "轻奢定制模块沙发", "3200 × 980 × 720mm", 1, "套", [42000, 88000], "结合样板间客厅展示面，沙发体量需匹配开间与拍摄视角。"],
+      ["茶几", "岩板金属茶几", "1200 × 700 × 380mm", 1, "张", [9800, 26000], "岩板纹理与金属脚颜色需呼应整体轻奢风格。"],
+      ["边几", "金属边几", "Φ450 × 520mm", 2, "只", [3200, 8800], "建议与茶几金属色同批确认，兼顾陈设与拍摄。"],
+      ["休闲椅", "轻奢皮革休闲椅", "780 × 820 × 760mm", 1, "把", [8800, 22000], "作为客厅角落焦点，皮革颜色建议低饱和暖灰或象牙白。"],
+      ["地毯", "艺术羊毛地毯", "3000 × 4000mm", 1, "张", [16000, 36000], "建议覆盖沙发前脚，提升样板间完整度与脚感。"],
+      ["落地灯", "金属落地灯", "H1550-1700mm，2700K-3000K", 1, "盏", [4200, 14000], "作为氛围补光，注意与拍摄灯光避免眩光。"],
+      ["装饰画", "抽象艺术挂画", "1200 × 1600mm", 1, "幅", [6800, 22000], "画面色彩需呼应客厅主色与金属点缀。"],
+      ["花艺", "艺术花艺组合", "H450-650mm，含花器", 1, "组", [2600, 9800], "选择低维护仿真花艺，保证长期展示效果。"],
+      ["摆件", "金属雕塑摆件", "托盘 + 金属雕塑 + 艺术书", 1, "组", [3200, 12800], "控制金属摆件数量，避免画面过满。"],
+    ];
+  }
+
+  if (context.projectCategory === "家装" && context.projectSubtype === "大平层" && style === "中古风" && space === "客厅") {
+    return [
+      ["沙发", "中古胡桃木框架沙发", "3200 × 980 × 720mm", 1, "套", [36000, 72000], "胡桃木框架需与茶几、边几木色同批确认。"],
+      ["茶几", "胡桃木复古茶几", "1200 × 650 × 380mm", 1, "张", [8800, 22000], "保留木纹肌理，台面高度需匹配沙发坐高。"],
+      ["休闲椅", "中古皮革休闲椅", "780 × 820 × 760mm", 1, "把", [6800, 18000], "皮革颜色建议选焦糖棕或深棕，与胡桃木形成层次。"],
+      ["地毯", "中古感羊毛手工地毯", "2400 × 3400mm", 1, "张", [8500, 24000], "可选择低饱和几何纹样，覆盖沙发前脚。"],
+      ["落地灯", "复古金属落地灯", "H1550-1700mm，2700K-3000K", 1, "盏", [3600, 12000], "金属件建议做旧铜或黑钛，作为夜间氛围光。"],
+      ["边几", "胡桃木边几", "Φ450 × 520mm", 2, "只", [2600, 7800], "可放置落地灯、艺术书或小型雕塑。"],
+      ["装饰画", "抽象肌理装饰画", "1200 × 1600mm", 1, "幅", [5200, 19000], "画面选择橄榄绿、暖棕或米灰呼应整体色板。"],
+    ];
+  }
+
+  return null;
+}
+
+function getTemplateRows(space, style, context = getGenerationContext()) {
+  return getContextualTemplateRows(space, style, context) || styleSpaceTemplateOverrides[style]?.[space] || spaceTemplates[space] || spaceTemplates.客厅;
 }
 
 function resolveProductName(style, category, baseName) {
@@ -965,10 +995,11 @@ function mapExplicitTemplateItem(space, item) {
 }
 
 function buildTemplateItems(space, style, context = getGenerationContext()) {
-  const explicitTemplates = BOQ_TEMPLATES[style]?.[space];
-  const sourceItems = explicitTemplates?.length
+  const contextualRows = getContextualTemplateRows(space, style, context);
+  const explicitTemplates = contextualRows ? null : BOQ_TEMPLATES[style]?.[space];
+  const sourceItems = contextualRows || (explicitTemplates?.length
     ? explicitTemplates.map((item) => explicitTemplateToTuple(item))
-    : getTemplateRows(space, style);
+    : getTemplateRows(space, style, context));
   const profile = styleProfiles[style] || styleProfiles.奶油风;
   const budgetRatio = getBudgetRatio(context);
 
@@ -1047,6 +1078,8 @@ function adjustQuantity(quantity, context, space, category) {
 }
 
 function resolveContextualProductName(style, category, baseName, context, space) {
+  if (getContextualTemplateRows(space, style, context)) return baseName;
+
   if (context.projectCategory === "工装" && context.projectSubtype === "样板间" && style === "雅奢" && space === "客厅") {
     return ({
       主沙发: "雅奢定制沙发",
@@ -1353,7 +1386,7 @@ function renderSubtypeOptions() {
 function updateGeneratorAvailability() {
   const ready = hasRequiredUploads();
   [elements.generateTemplateBtn, elements.generateAllSpacesBtn].forEach((button) => {
-    button.disabled = !ready;
+    button.disabled = false;
     button.title = ready ? "" : REQUIRED_UPLOAD_MESSAGE;
   });
   elements.uploadRequirementText.textContent = ready
