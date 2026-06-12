@@ -212,6 +212,7 @@ let exportMode = "client";
 let pendingOnly = false;
 let query = "";
 let activeLibraryCard = null;
+let inlineEditSaveTimer = null;
 saveState();
 
 const elements = {
@@ -396,6 +397,22 @@ function createPersistedWorkspace() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedWorkspace()));
+}
+
+function scheduleInlineEditSave() {
+  window.clearTimeout(inlineEditSaveTimer);
+  inlineEditSaveTimer = window.setTimeout(() => {
+    saveState();
+    inlineEditSaveTimer = null;
+  }, 350);
+}
+
+function flushInlineEditSave() {
+  if (inlineEditSaveTimer) {
+    window.clearTimeout(inlineEditSaveTimer);
+    inlineEditSaveTimer = null;
+  }
+  saveState();
 }
 
 function extractArea(title) {
@@ -627,6 +644,33 @@ function subtotal(item) {
   return Number(item.quantity || 0) * Number(item.unitPrice || 0);
 }
 
+function parseInlineAmount(value) {
+  const normalized = String(value ?? "").replaceAll(",", "").trim();
+  if (!normalized) return 0;
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function updateBudgetSummary() {
+  const total = getProjectTotal(state);
+  const pendingTotal = state.items.filter((item) => PENDING_STATUSES.includes(item.status)).reduce((sum, item) => sum + subtotal(item), 0);
+  const confirmed = state.items.filter((item) => item.status === "客户已确认").length;
+  const score = state.items.length ? Math.round((confirmed / state.items.length) * 100) : 0;
+
+  elements.totalBudget.textContent = money(total);
+  elements.totalItems.textContent = `${state.items.length} 项产品`;
+  elements.confirmedCount.textContent = `${confirmed} 项`;
+  elements.pendingAmount.textContent = money(pendingTotal);
+  elements.purchaseScore.textContent = `${score}%`;
+}
+
+function updateInlineRowBudget(input, item) {
+  const row = input.closest("tr");
+  const subtotalCell = row?.querySelector("[data-subtotal-cell]");
+  if (subtotalCell) subtotalCell.textContent = money(subtotal(item));
+  updateBudgetSummary();
+}
+
 function getVisibleItems() {
   const searchQuery = query.trim().toLowerCase();
   return state.items.filter((item) => {
@@ -638,7 +682,6 @@ function getVisibleItems() {
 
 function render() {
   const visibleItems = getVisibleItems();
-  const total = getProjectTotal(state);
   const area = getProjectArea(state);
   const style = getProjectStyle(state);
 
@@ -659,15 +702,7 @@ function render() {
     ? visibleItems.map(renderRow).join("")
     : '<tr><td colspan="12" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
-  const pendingTotal = state.items.filter((item) => PENDING_STATUSES.includes(item.status)).reduce((sum, item) => sum + subtotal(item), 0);
-  const confirmed = state.items.filter((item) => item.status === "客户已确认").length;
-  const score = state.items.length ? Math.round((confirmed / state.items.length) * 100) : 0;
-
-  elements.totalBudget.textContent = money(total);
-  elements.totalItems.textContent = `${state.items.length} 项产品`;
-  elements.confirmedCount.textContent = `${confirmed} 项`;
-  elements.pendingAmount.textContent = money(pendingTotal);
-  elements.purchaseScore.textContent = `${score}%`;
+  updateBudgetSummary();
   renderTemplateLibrary();
 }
 
@@ -713,11 +748,11 @@ function renderRow(item) {
       <td>${escapeHtml(item.category)}</td>
       <td class="item-cell">${escapeHtml(item.name)}</td>
       <td>${escapeHtml(item.spec)}</td>
-      <td><input class="inline-number" type="number" min="0" step="0.01" value="${Number(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /> ${escapeHtml(item.unit)}</td>
+      <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /> ${escapeHtml(item.unit)}</td>
       <td class="price-range customer-hidden">${escapeHtml(item.priceRange || formatPriceRange([Number(item.unitPrice || 0), Number(item.unitPrice || 0)]))}</td>
-      <td class="money customer-hidden"><input class="inline-price" type="number" min="0" step="0.01" value="${Number(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
+      <td class="money customer-hidden"><input class="inline-price" type="text" inputmode="numeric" value="${escapeHtml(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
-      <td class="money">${money(subtotal(item))}</td>
+      <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
       <td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
       <td class="customer-hidden note-cell">${escapeHtml(item.note || "-")}</td>
       <td class="actions-col row-actions">
@@ -1012,9 +1047,21 @@ elements.tableBody.addEventListener("input", (event) => {
   if (!input) return;
   const item = state.items.find((entry) => entry.id === input.dataset.id);
   if (!item) return;
-  item[input.dataset.action] = Number(input.value || 0);
-  saveState();
-  render();
+  item[input.dataset.action] = parseInlineAmount(input.value);
+  updateInlineRowBudget(input, item);
+  scheduleInlineEditSave();
+});
+
+elements.tableBody.addEventListener("change", (event) => {
+  const input = event.target.closest("input[data-action]");
+  if (!input) return;
+  flushInlineEditSave();
+});
+
+elements.tableBody.addEventListener("focusout", (event) => {
+  const input = event.target.closest("input[data-action]");
+  if (!input) return;
+  flushInlineEditSave();
 });
 
 elements.tableBody.addEventListener("click", (event) => {
