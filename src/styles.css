@@ -13,6 +13,7 @@ body {
   margin: 0;
   min-width: 1180px;
   min-height: 100vh;
+  overflow-x: auto;
   background:
     radial-gradient(circle at 18% 12%, rgba(196, 164, 111, 0.22), transparent 32%),
     radial-gradient(circle at 92% 4%, rgba(85, 102, 85, 0.16), transparent 36%),
@@ -35,6 +36,7 @@ button, a { font: inherit; }
   height: calc(100vh - 44px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   padding: 24px;
   border: 1px solid rgba(40, 43, 38, 0.08);
   border-radius: 32px;
@@ -43,7 +45,7 @@ button, a { font: inherit; }
   box-shadow: 0 28px 70px rgba(31, 35, 32, 0.22);
 }
 
-.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 34px; }
+.brand { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; margin-bottom: 34px; }
 .brand-mark {
   display: grid; place-items: center;
   width: 50px; height: 50px;
@@ -54,7 +56,7 @@ button, a { font: inherit; }
 .brand strong { display: block; font-size: 18px; letter-spacing: .02em; }
 .brand span { color: rgba(247, 240, 228, .62); font-size: 13px; }
 
-.nav-list { display: grid; gap: 8px; }
+.nav-list { display: grid; flex: 0 0 auto; gap: 8px; }
 .nav-list a {
   display: flex; align-items: center; gap: 12px;
   padding: 13px 14px;
@@ -69,7 +71,8 @@ button, a { font: inherit; }
 }
 
 .side-card {
-  margin-top: auto;
+  flex: 0 0 auto;
+  margin-top: 0;
   padding: 18px;
   border: 1px solid rgba(229, 207, 156, .22);
   border-radius: 22px;
@@ -355,12 +358,31 @@ td {
 @media (max-width: 1280px) {
   body { min-width: 1024px; }
   .app-shell { grid-template-columns: 250px minmax(0,1fr); }
+  .sidebar { padding: 18px; }
+  .brand { margin-bottom: 24px; }
+  .sidebar-projects { margin: 16px 0 14px; padding: 12px; }
+  .side-card { padding: 16px; }
   .top-actions .search { display: none; }
   .library-grid, .preview-grid, .mode-options { grid-template-columns: 1fr; }
   .hero-copy h2 { font-size: 36px; }
   .template-builder { grid-template-columns: 1fr; }
   .template-controls { justify-content: flex-start; }
   .content-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-height: 760px) {
+  .app-shell { padding-block: 14px; }
+  .sidebar {
+    top: 14px;
+    height: calc(100vh - 28px);
+    padding-block: 16px;
+  }
+  .brand { margin-bottom: 16px; }
+  .nav-list { gap: 6px; }
+  .nav-list a { padding-block: 10px; }
+  .sidebar-projects { margin: 14px 0 12px; }
+  .side-card { padding-block: 14px; }
+  .side-card p { margin: 8px 0 12px; line-height: 1.5; }
 }
 
 .search input {
@@ -472,18 +494,22 @@ td {
 .current-project-line strong { color: #252820; }
 
 .sidebar-projects {
-  margin: 20px 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 20px 0 16px;
   padding: 14px;
   border: 1px solid rgba(229, 207, 156, .18);
   border-radius: 22px;
   background: rgba(255, 255, 255, .07);
-  min-height: 0;
 }
 .sidebar-projects-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex: 0 0 auto;
   margin-bottom: 12px;
   color: rgba(247, 240, 228, .92);
   font-weight: 900;
@@ -502,10 +528,16 @@ td {
 }
 .sidebar-project-list {
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  min-height: 0;
   gap: 10px;
-  max-height: 42vh;
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .project-switcher {
