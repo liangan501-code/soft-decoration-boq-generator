@@ -95,14 +95,23 @@ button, a { font: inherit; }
   text-transform: uppercase;
 }
 h1 { margin: 0; font-size: 32px; letter-spacing: -.04em; }
-.top-actions { display: flex; align-items: center; gap: 12px; }
-.search {
+.project-meta { margin: 8px 0 0; color: #8a806f; font-size: 13px; font-weight: 700; }
+.top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.search, .project-switcher, .export-mode {
   display: flex; align-items: center; gap: 10px;
-  width: 270px; padding: 12px 14px;
+  padding: 12px 14px;
   border: 1px solid rgba(40, 43, 38, .08);
   border-radius: 16px;
   color: #88806f; background: rgba(255,255,255,.66);
 }
+.search { width: 270px; }
+.project-switcher, .export-mode {
+  color: #6d6559; font-size: 13px; font-weight: 800;
+}
+.project-switcher select, .export-mode select {
+  max-width: 190px; border: 0; outline: 0; color: #2d2e28; background: transparent; font: inherit;
+}
+.export-mode select { max-width: 110px; }
 
 .icon-button, .ghost-button, .primary-button, .secondary-button {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -206,6 +215,17 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -.04em; }
   font: inherit;
 }
 .price-range { min-width: 150px; color: #6d542a; font-weight: 800; }
+.template-library .panel-header span {
+  padding: 8px 12px; border-radius: 999px; color: #6d542a; background: #f2e5c8; font-weight: 800; font-size: 13px;
+}
+.library-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.library-grid article {
+  min-height: 132px; padding: 18px; border-radius: 22px;
+  border: 1px solid rgba(48, 50, 44, .08);
+  background: linear-gradient(145deg, rgba(255,250,241,.9), rgba(241,231,211,.75));
+}
+.library-grid strong { display: block; margin-bottom: 9px; color: #2d2e28; font-size: 16px; }
+.library-grid p { margin: 0; color: #70685b; line-height: 1.7; }
 
 .content-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; }
 .panel { border-radius: 30px; padding: 24px; min-width: 0; }
@@ -252,6 +272,7 @@ td {
   body { min-width: 1024px; }
   .app-shell { grid-template-columns: 250px minmax(0,1fr); }
   .top-actions .search { display: none; }
+  .library-grid { grid-template-columns: 1fr; }
   .hero-copy h2 { font-size: 36px; }
   .template-builder { grid-template-columns: 1fr; }
   .template-controls { justify-content: flex-start; }

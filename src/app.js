@@ -1,4 +1,5 @@
-const STORAGE_KEY = "maison-boq-state-v1";
+const LEGACY_STORAGE_KEY = "maison-boq-state-v1";
+const STORAGE_KEY = "maison-boq-workspace-v2";
 function createId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -8,9 +9,11 @@ function createId() {
 
 const PENDING_STATUSES = ["待确认", "采购询价中", "需复核尺寸"];
 
-const defaultState = {
+const defaultProject = () => ({
+  id: createId(),
   projectTitle: "滨江私宅 240㎡ 软装 BOQ 管理",
   clientMode: false,
+  exportMode: "client",
   pendingOnly: false,
   query: "",
   items: [
@@ -80,7 +83,7 @@ const defaultState = {
       note: "客户已确认皮色，安排采购锁库存。",
     },
   ],
-};
+});
 
 const sampleImportItems = [
   {
@@ -176,20 +179,24 @@ const spaceTemplates = {
     ["吊灯", "洽谈区装饰灯", "Φ600-800mm，3000K", 1, "盏", [3800, 16000], "避免眩光直射客户视线。"],
     ["绿植", "大型造景绿植", "H1200-1600mm", 1, "组", [1800, 8600], "可提升空间停留感和亲和度。"],
   ],
-  样板间公区: [
-    ["接待沙发", "公区接待沙发", "2600 × 900 × 720mm", 1, "套", [28000, 88000], "需兼顾高频接待耐用度。"],
-    ["艺术装置", "公共区艺术装置", "定制 1200-1800mm", 1, "组", [18000, 98000], "建议提前确认安装结构和消防通道。"],
-    ["休闲椅", "公区休闲椅", "760 × 780 × 760mm", 2, "把", [6800, 26000], "造型需具备记忆点，适合拍照传播。"],
-    ["边几", "公区边几", "Φ500 × 520mm", 2, "只", [2600, 9800], "材质需耐刮擦，便于维护。"],
-    ["地毯", "公区大地毯", "3000 × 4000mm", 1, "张", [12000, 42000], "建议选择商用级耐磨材质。"],
-    ["香氛", "空间香氛系统", "覆盖 80-120㎡", 1, "套", [3800, 16000], "与项目调性匹配，避免香味过浓。"],
+  书房: [
+    ["书桌", "书房主书桌", "1600 × 700 × 750mm", 1, "张", [8800, 36000], "需确认插座、台灯与电脑走线位置。"],
+    ["书椅", "人体工学书椅", "620 × 620 × 880mm", 1, "把", [3800, 18000], "优先试坐，靠背高度与扶手需匹配书桌。"],
+    ["阅读椅", "书房阅读单椅", "780 × 820 × 820mm", 1, "把", [6800, 28000], "适合与落地灯形成独立阅读角。"],
+    ["边几", "阅读角边几", "Φ420 × 520mm", 1, "只", [1800, 7600], "承托茶杯、书籍与香氛，避免过大占用通道。"],
+    ["台灯", "书桌工作台灯", "H420-560mm，3000K-4000K", 1, "盏", [1800, 9800], "建议具备局部调光，兼顾工作与阅读。"],
+    ["装饰摆件", "书柜陈设组合", "艺术书 + 雕塑 + 收纳盒", 1, "组", [2600, 12000], "按三角构图分层陈列，保留 30% 留白。"],
   ],
 };
 
-let state = loadState();
+const workspace = loadWorkspace();
+let state = getActiveProject();
 
 const elements = {
   projectTitle: document.querySelector("#projectTitle"),
+  reportModeLabel: document.querySelector("#reportModeLabel"),
+  projectMeta: document.querySelector("#projectMeta"),
+  projectSelect: document.querySelector("#projectSelect"),
   tableBody: document.querySelector("#boqTableBody"),
   totalBudget: document.querySelector("#totalBudget"),
   totalItems: document.querySelector("#totalItems"),
@@ -200,6 +207,8 @@ const elements = {
   templateSpaceInput: document.querySelector("#templateSpaceInput"),
   templateStyleInput: document.querySelector("#templateStyleInput"),
   generateTemplateBtn: document.querySelector("#generateTemplateBtn"),
+  generateAllSpacesBtn: document.querySelector("#generateAllSpacesBtn"),
+  exportModeInput: document.querySelector("#exportModeInput"),
   newProjectBtn: document.querySelector("#newProjectBtn"),
   importBtn: document.querySelector("#importBtn"),
   exportBtn: document.querySelector("#exportBtn"),
@@ -232,18 +241,56 @@ const elements = {
   toast: document.querySelector("#toast"),
 };
 
-function loadState() {
+function loadWorkspace() {
   try {
     const cached = localStorage.getItem(STORAGE_KEY);
-    return cached ? JSON.parse(cached) : structuredClone(defaultState);
+    if (cached) return normalizeWorkspace(JSON.parse(cached));
+
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      const migratedProject = normalizeProject(JSON.parse(legacy));
+      migratedProject.id = migratedProject.id || createId();
+      return normalizeWorkspace({ activeProjectId: migratedProject.id, projects: [migratedProject] });
+    }
+
+    const project = defaultProject();
+    return { activeProjectId: project.id, projects: [project] };
   } catch (error) {
-    console.warn("无法读取本地数据，已使用默认清单", error);
-    return structuredClone(defaultState);
+    console.warn("无法读取本地数据，已使用默认项目库", error);
+    const project = defaultProject();
+    return { activeProjectId: project.id, projects: [project] };
   }
 }
 
+function normalizeWorkspace(value) {
+  const projects = Array.isArray(value?.projects) && value.projects.length
+    ? value.projects.map(normalizeProject)
+    : [defaultProject()];
+  const activeProjectId = projects.some((project) => project.id === value?.activeProjectId) ? value.activeProjectId : projects[0].id;
+  return { activeProjectId, projects };
+}
+
+function normalizeProject(project) {
+  return {
+    ...defaultProject(),
+    ...project,
+    id: project?.id || createId(),
+    projectTitle: project?.projectTitle || "未命名软装项目",
+    clientMode: Boolean(project?.clientMode),
+    exportMode: project?.exportMode || "client",
+    pendingOnly: Boolean(project?.pendingOnly),
+    query: project?.query || "",
+    items: Array.isArray(project?.items) ? project.items : [],
+  };
+}
+
+function getActiveProject() {
+  const active = workspace.projects.find((project) => project.id === workspace.activeProjectId);
+  return active || workspace.projects[0];
+}
+
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
 }
 
 function money(value) {
@@ -280,17 +327,28 @@ function buildTemplateItems(space, style) {
   }));
 }
 
-function generateTemplate() {
-  const space = elements.templateSpaceInput.value;
-  const style = elements.templateStyleInput.value;
-  const generatedItems = buildTemplateItems(space, style);
+function appendGeneratedItems(generatedItems, message) {
   state.items = [...state.items, ...generatedItems];
   state.pendingOnly = false;
   state.query = "";
   saveState();
   render();
   document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
-  showToast(`已生成 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`);
+  showToast(message);
+}
+
+function generateTemplate() {
+  const space = elements.templateSpaceInput.value;
+  const style = elements.templateStyleInput.value;
+  const generatedItems = buildTemplateItems(space, style);
+  appendGeneratedItems(generatedItems, `已生成 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`);
+}
+
+function generateAllSpacesTemplate() {
+  const style = elements.templateStyleInput.value;
+  const spaces = Object.keys(spaceTemplates);
+  const generatedItems = spaces.flatMap((space) => buildTemplateItems(space, style));
+  appendGeneratedItems(generatedItems, `已一键生成 ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`);
 }
 
 function subtotal(item) {
@@ -309,7 +367,14 @@ function getVisibleItems() {
 function render() {
   const visibleItems = getVisibleItems();
   elements.projectTitle.textContent = state.projectTitle;
+  elements.reportModeLabel.textContent = state.exportMode === "internal" ? "软装全案 · 内部采购版" : "软装全案 · 客户汇报版";
+  elements.projectMeta.textContent = `${workspace.projects.length} 个项目 · 当前 ${state.items.length} 项清单`;
+  elements.projectSelect.innerHTML = workspace.projects
+    .map((project) => `<option value="${escapeHtml(project.id)}">${escapeHtml(project.projectTitle)}</option>`)
+    .join("");
+  elements.projectSelect.value = state.id;
   elements.searchInput.value = state.query;
+  elements.exportModeInput.value = state.exportMode || "client";
   elements.clearFilterBtn.hidden = !state.pendingOnly;
   elements.clientFieldsBtn.textContent = state.clientMode ? "客户版字段：已隐藏内部字段" : "客户版字段：全字段";
   document.body.classList.toggle("client-mode", state.clientMode);
@@ -423,16 +488,28 @@ function importSamples() {
 }
 
 function exportCsv() {
-  const headers = ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注"];
-  const rows = state.items.map((item) => [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note]);
+  const isClientReport = state.exportMode !== "internal";
+  const headers = isClientReport
+    ? ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "预算小计", "状态", "客户备注"]
+    : ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注"];
+  const rows = state.items.map((item) => isClientReport
+    ? [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", subtotal(item), item.status, customerNote(item)]
+    : [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
+  const modeName = isClientReport ? "客户汇报版" : "内部采购版";
   link.href = URL.createObjectURL(blob);
-  link.download = `${state.projectTitle.replace(/[\\/:*?"<>|]/g, "-")}-汇报表.csv`;
+  link.download = `${state.projectTitle.replace(/[\\/:*?"<>|]/g, "-")}-${modeName}.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
-  showToast("已导出 CSV 汇报表");
+  showToast(`已导出 ${modeName} CSV`);
+}
+
+function customerNote(item) {
+  if (item.status === "需复核尺寸") return "待现场复尺后锁定尺寸与预算。";
+  if (item.status === "采购询价中") return "正在进行多方比价，保留同风格备选。";
+  return item.status === "备选推荐" ? "作为风格与预算备选项。" : "已纳入当前汇报清单。";
 }
 
 function csvCell(value) {
@@ -455,10 +532,23 @@ function printClientPdf() {
 function addProject() {
   const name = window.prompt("请输入新项目名称", "新项目软装 BOQ 管理");
   if (!name?.trim()) return;
-  state = { ...structuredClone(defaultState), projectTitle: name.trim(), items: [] };
+  const project = { ...defaultProject(), projectTitle: name.trim(), items: [] };
+  workspace.projects.push(project);
+  workspace.activeProjectId = project.id;
+  state = project;
   saveState();
   render();
-  showToast("已新增项目，当前清单为空");
+  showToast("已新增并切换到空白项目");
+}
+
+function switchProject(projectId) {
+  const nextProject = workspace.projects.find((project) => project.id === projectId);
+  if (!nextProject) return;
+  workspace.activeProjectId = projectId;
+  state = nextProject;
+  saveState();
+  render();
+  showToast(`已切换到「${state.projectTitle}」`);
 }
 
 elements.tableBody.addEventListener("input", (event) => {
@@ -508,7 +598,16 @@ elements.closeDialogBtn.addEventListener("click", () => elements.productDialog.c
 elements.cancelDialogBtn.addEventListener("click", () => elements.productDialog.close());
 elements.addProductBtn.addEventListener("click", () => openProductDialog());
 elements.generateTemplateBtn.addEventListener("click", generateTemplate);
+elements.generateAllSpacesBtn.addEventListener("click", generateAllSpacesTemplate);
 elements.newProjectBtn.addEventListener("click", addProject);
+elements.projectSelect.addEventListener("change", (event) => switchProject(event.target.value));
+elements.exportModeInput.addEventListener("change", (event) => {
+  state.exportMode = event.target.value;
+  state.clientMode = event.target.value === "client";
+  saveState();
+  render();
+  showToast(state.exportMode === "client" ? "已切换为客户汇报版导出" : "已切换为内部采购版导出");
+});
 elements.importBtn.addEventListener("click", importSamples);
 elements.exportBtn.addEventListener("click", exportCsv);
 elements.printClientBtn.addEventListener("click", printClientPdf);
