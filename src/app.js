@@ -658,7 +658,8 @@ function dedupeProjects(projects) {
 function normalizeProject(project = {}) {
   const fallback = defaultProject();
   const name = project.name || project.projectTitle || fallback.name;
-  const items = Array.isArray(project.items) ? project.items.map(normalizeItem) : [];
+  const projectStyle = project.style || inferProjectStyle(name);
+  const items = Array.isArray(project.items) ? project.items.map((item, index) => normalizeItem(item, index, projectStyle)) : [];
   const projectCategory = PROJECT_SUBTYPES[project.projectCategory] ? project.projectCategory : inferProjectCategory(project.projectType);
   const projectSubtype = normalizeSubtype(project.projectSubtype || project.projectType, projectCategory);
   return {
@@ -669,7 +670,7 @@ function normalizeProject(project = {}) {
     projectSubtype,
     projectType: project.projectType || `${projectSubtype}软装`,
     area: normalizeArea(project.area ?? extractArea(name)),
-    style: project.style || inferProjectStyle(name),
+    style: projectStyle,
     targetBudget: Number(project.targetBudget || 0),
     remark: project.remark || project.notes || "",
     attachments: normalizeAttachments(project.attachments),
@@ -677,23 +678,68 @@ function normalizeProject(project = {}) {
   };
 }
 
-function normalizeItem(item = {}) {
+function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
+  const productName = item.productName || item.name || "未命名产品";
+  const size = item.size || extractSizeFromLegacySpec(item.spec) || "按图纸复核";
+  const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || item.note || "待确认材质、颜色与工艺";
+  const unitPrice = Number(item.unitPrice || item.price || 0);
+  const quantity = Number(item.quantity || 0);
+  const productImageUploaded = Boolean(item.productImageUploaded || (item.productImage && !isPlaceholderImage(item.productImage)));
   return {
     id: item.id || createId(),
+    code: formatItemCode(index),
     space: item.space || "未分区",
     category: item.category || "待分类",
-    name: item.name || "未命名产品",
-    spec: item.spec || "",
-    quantity: Number(item.quantity || 0),
+    productImage: item.productImage || (item.productImageStorageKey ? "" : createProductPlaceholderImage(item.category || "待分类", projectStyle)),
+    productImageUploaded,
+    productImageStorageKey: item.productImageStorageKey || "",
+    productImageStorage: item.productImageStorage || "localStorage",
+    productName,
+    size,
+    quantity,
     unit: item.unit || "件",
-    unitPrice: Number(item.unitPrice || item.price || 0),
-    priceRange: item.priceRange || "",
+    materialSuggestion,
+    unitPrice,
     supplier: item.supplier || "",
+    subtotal: Number(item.subtotal || quantity * unitPrice),
     status: item.status || "待确认",
-    note: item.note || item.remark || "",
+    materialSampleImages: normalizeMaterialSampleImages(item.materialSampleImages),
     clientNote: item.clientNote || item.customerNote || "",
-    customerVisible: item.customerVisible !== false,
+    clientVisible: item.clientVisible ?? item.customerVisible ?? true,
+    name: productName,
+    spec: size,
+    priceRange: materialSuggestion,
+    note: item.note || item.remark || "",
+    customerVisible: item.clientVisible ?? item.customerVisible ?? true,
   };
+}
+
+function normalizeMaterialSampleImages(images = []) {
+  return Array.isArray(images)
+    ? images.filter(Boolean).slice(0, 3).map((image) => typeof image === "string" ? { id: createId(), dataUrl: image, name: "材料样板" } : {
+      id: image.id || createId(),
+      name: image.name || "材料样板",
+      type: image.type || "image/*",
+      size: Number(image.size || 0),
+      dataUrl: image.dataUrl || image.url || "",
+      storageKey: image.storageKey || "",
+      storage: image.storage || "localStorage",
+      uploadedAt: image.uploadedAt || new Date().toISOString(),
+    }).filter((image) => image.dataUrl || image.storageKey)
+    : [];
+}
+
+function extractSizeFromLegacySpec(spec = "") {
+  const text = String(spec || "");
+  if (!text) return "";
+  return text.replace(/^常见尺寸：/, "").split(/[；;]/)[0].trim();
+}
+
+function extractMaterialSuggestionFromLegacySpec(spec = "") {
+  const text = String(spec || "");
+  const material = text.match(/材质：([^；;]+)/)?.[1]?.trim();
+  const color = text.match(/颜色：([^；;]+)/)?.[1]?.trim();
+  return [material, color].filter(Boolean).join(" / ");
 }
 
 function inferProjectCategory(projectType = "") {
@@ -752,7 +798,7 @@ function createPersistedWorkspace() {
       targetBudget: Number(project.targetBudget || 0),
       remark: project.remark || "",
       attachments: createPersistedAttachments(project.attachments),
-      items: project.items.map(normalizeItem),
+      items: project.items.map((item, index) => normalizeItem(item, index, project.style)),
     })),
   };
 }
@@ -770,6 +816,10 @@ function createPersistedAttachments(attachments = {}) {
 
 function buildImageStorageKey(projectId, collection, imageId) {
   return `${projectId || "project"}:${collection}:${imageId}`;
+}
+
+function buildItemImageStorageKey(projectId, itemId, field, imageId = "main") {
+  return `${projectId || "project"}:items:${itemId}:${field}:${imageId}`;
 }
 
 function openImageDb() {
@@ -832,15 +882,29 @@ function markWorkspaceImageAsIndexedDb(projectId, collection, imageId, storageKe
 }
 
 async function hydrateWorkspaceFromIndexedDb() {
-  const imageFiles = workspace.projects.flatMap((project) => Object.keys(UPLOAD_COLLECTIONS).flatMap((collection) => (
-    (project.attachments?.[collection] || []).filter((file) => file.storageKey && !file.dataUrl)
-  )));
+  const imageFiles = workspace.projects.flatMap((project) => [
+    ...Object.keys(UPLOAD_COLLECTIONS).flatMap((collection) => (
+      (project.attachments?.[collection] || []).filter((file) => file.storageKey && !file.dataUrl)
+    )),
+    ...(project.items || []).filter((item) => item.productImageStorageKey && !item.productImage).map((item) => ({
+      storageKey: item.productImageStorageKey,
+      setDataUrl: (dataUrl) => { item.productImage = dataUrl; },
+    })),
+    ...(project.items || []).flatMap((item) => (item.materialSampleImages || []).filter((image) => image.storageKey && !image.dataUrl).map((image) => ({
+      storageKey: image.storageKey,
+      setDataUrl: (dataUrl) => { image.dataUrl = dataUrl; },
+    }))),
+  ]);
   if (!imageFiles.length) return;
   const results = await Promise.allSettled(imageFiles.map((file) => readImageFromIndexedDb(file.storageKey)));
   results.forEach((result, index) => {
-    if (result.status === "fulfilled" && result.value) imageFiles[index].dataUrl = result.value;
+    if (result.status === "fulfilled" && result.value) {
+      if (imageFiles[index].setDataUrl) imageFiles[index].setDataUrl(result.value);
+      else imageFiles[index].dataUrl = result.value;
+    }
   });
   renderUploadPreviews();
+  render();
 }
 
 function safeShowToast(message) {
@@ -869,6 +933,25 @@ function saveState() {
           saveJobs.push(saveImageToIndexedDb(storageKey, file.dataUrl));
           return { ...file, dataUrl: "", storageKey, storage: "indexedDB", storageNotice: "已保存预览图" };
         });
+      });
+      project.items = (project.items || []).map((item) => {
+        const nextItem = { ...item };
+        if (nextItem.productImage && nextItem.productImageUploaded) {
+          const storageKey = nextItem.productImageStorageKey || buildItemImageStorageKey(project.id, nextItem.id, "productImage");
+          saveJobs.push(saveImageToIndexedDb(storageKey, nextItem.productImage));
+          const liveItem = workspace.projects.find((entry) => entry.id === project.id)?.items?.find((entry) => entry.id === nextItem.id);
+          if (liveItem) liveItem.productImageStorageKey = storageKey;
+          nextItem.productImage = "";
+          nextItem.productImageStorageKey = storageKey;
+          nextItem.productImageStorage = "indexedDB";
+        }
+        nextItem.materialSampleImages = normalizeMaterialSampleImages(nextItem.materialSampleImages).map((image) => {
+          if (!image.dataUrl) return image;
+          const storageKey = image.storageKey || buildItemImageStorageKey(project.id, nextItem.id, "materialSampleImages", image.id);
+          saveJobs.push(saveImageToIndexedDb(storageKey, image.dataUrl));
+          return { ...image, dataUrl: "", storageKey, storage: "indexedDB" };
+        });
+        return nextItem;
       });
     });
     try {
@@ -921,11 +1004,75 @@ function getProjectTotal(project) {
 }
 
 function cloneProjectItems(items) {
-  return items.map((item) => ({ ...item, id: createId() }));
+  return items.map((item, index) => normalizeItem({ ...item, id: createId() }, index));
 }
 
 function money(value) {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value || 0);
+}
+
+function formatItemCode(index) {
+  return `KN-${String(Number(index || 0) + 1).padStart(2, "0")}`;
+}
+
+function renumberItems(items = state.items) {
+  items.forEach((item, index) => { item.code = formatItemCode(index); });
+  return items;
+}
+
+function getItemCode(item) {
+  const index = state.items.findIndex((entry) => entry.id === item.id);
+  return formatItemCode(index < 0 ? 0 : index);
+}
+
+function subtotal(item) {
+  return Number(item.quantity || 0) * Number(item.unitPrice || 0);
+}
+
+function materialSuggestionForStyle(profile) {
+  return `${profile.material} / ${profile.color}`;
+}
+
+function isPlaceholderImage(dataUrl = "") {
+  return String(dataUrl).startsWith("data:image/svg+xml") && String(dataUrl).includes("boq-placeholder");
+}
+
+function createProductPlaceholderImage(category = "软装", style = "雅奢") {
+  const palette = getPlaceholderPalette(style);
+  const shape = getPlaceholderShape(category);
+  const title = escapeXml(category || "软装产品");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220" role="img" aria-label="${title}占位图"><defs><linearGradient id="boq-placeholder-bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="${palette.bg1}"/><stop offset="1" stop-color="${palette.bg2}"/></linearGradient><pattern id="boq-placeholder-texture" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M0 18L18 0" stroke="${palette.line}" stroke-opacity=".16" stroke-width="1"/></pattern></defs><rect width="320" height="220" rx="28" fill="url(#boq-placeholder-bg)"/><rect width="320" height="220" rx="28" fill="url(#boq-placeholder-texture)"/><circle cx="268" cy="42" r="34" fill="${palette.accent}" opacity=".22"/><g fill="none" stroke="${palette.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".88">${shape}</g><text x="24" y="190" fill="${palette.ink}" font-family="Arial, sans-serif" font-size="20" font-weight="700">${title}</text><text x="24" y="34" fill="${palette.accent}" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">BOQ IMAGE</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function getPlaceholderPalette(style = "雅奢") {
+  return ({
+    奶油风: { bg1: "#fff8ea", bg2: "#d8c2a0", accent: "#b89263", ink: "#7a6249", line: "#8d765f" },
+    中古风: { bg1: "#ead7bd", bg2: "#7c4d2f", accent: "#6b7a45", ink: "#4a2d1e", line: "#4a2d1e" },
+    轻奢风: { bg1: "#f8f3e8", bg2: "#b9b5ad", accent: "#c6a45e", ink: "#6c6760", line: "#9f8f73" },
+    法式: { bg1: "#fffdf5", bg2: "#e3d1b3", accent: "#b8914b", ink: "#82705a", line: "#ad966f" },
+    雅奢: { bg1: "#e7ddcf", bg2: "#6f6258", accent: "#cbb782", ink: "#3f332c", line: "#6e6258" },
+    度假风: { bg1: "#f2e4cc", bg2: "#c49d6d", accent: "#7e9a7d", ink: "#6e5436", line: "#8b704d" },
+    黑金风: { bg1: "#1f211f", bg2: "#4d4d49", accent: "#d1a85d", ink: "#e6c57b", line: "#d1a85d" },
+  })[style] || { bg1: "#f7efe2", bg2: "#c9b99a", accent: "#b6925c", ink: "#5f5447", line: "#8d806c" };
+}
+
+function getPlaceholderShape(category = "") {
+  const text = String(category);
+  if (/沙发/.test(text)) return '<path d="M56 128h208v32H56z"/><path d="M72 96h176q22 0 22 22v10H50v-10q0-22 22-22z"/><path d="M78 160v18M242 160v18"/>';
+  if (/茶几|边几|桌|餐桌/.test(text)) return '<path d="M82 116h156"/><path d="M104 116l-18 48M216 116l18 48"/><path d="M112 88h96q22 0 34 28H78q12-28 34-28z"/>';
+  if (/椅|单椅/.test(text)) return '<path d="M126 78h72v76h-72z"/><path d="M106 154h112"/><path d="M126 154l-16 30M198 154l16 30"/>';
+  if (/地毯/.test(text)) return '<rect x="74" y="66" width="172" height="104" rx="12"/><path d="M98 92c32 22 64-22 96 0s32 44 64 10"/><path d="M104 136h112"/>';
+  if (/灯|吊灯|落地灯|台灯/.test(text)) return '<path d="M160 50v42"/><path d="M118 92h84l-18 46h-48z"/><path d="M160 138v38"/><path d="M126 176h68"/>';
+  if (/画|艺术品/.test(text)) return '<rect x="88" y="54" width="144" height="114" rx="8"/><path d="M112 142l35-36 28 26 20-20 21 30"/>';
+  if (/花|绿植|花器/.test(text)) return '<path d="M140 136h40l-8 42h-24z"/><path d="M160 136c-6-36-34-42-48-66 28 0 42 12 48 34 7-24 23-38 48-42-8 28-25 48-48 74z"/>';
+  if (/摆件|雕塑|装置|托盘/.test(text)) return '<path d="M104 164h112"/><path d="M148 154c-40-26-12-88 34-94-20 24 10 42 12 68 2 22-18 34-46 26z"/>';
+  if (/窗帘|帘/.test(text)) return '<path d="M80 58h160"/><path d="M98 58v116M132 58v116M166 58v116M200 58v116"/><path d="M98 174c18-10 26-10 34 0s24 10 34 0 24-10 34 0"/>';
+  return '<rect x="94" y="70" width="132" height="92" rx="18"/><path d="M118 112h84M142 88h36M142 138h36"/>';
+}
+
+function escapeXml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&apos;", '"': "&quot;" })[char]);
 }
 
 
@@ -978,20 +1125,20 @@ function resolveProductName(style, category, baseName) {
 }
 
 function mapExplicitTemplateItem(space, item) {
-  return {
+  return normalizeItem({
     id: createId(),
     space,
     category: item.category,
-    name: item.name,
-    spec: item.specs,
+    productName: item.name,
+    size: item.specs,
     quantity: item.quantity,
     unit: item.unit || "件",
     unitPrice: Number(item.unitPrice || 0),
-    priceRange: item.suggestedPrice || "",
+    materialSuggestion: item.materialSuggestion || item.suggestedPrice || "",
     supplier: item.supplier,
     status: item.status || "待确认",
     note: item.internalNote || "",
-  };
+  }, 0, getProjectStyle(state));
 }
 
 function buildTemplateItems(space, style, context = getGenerationContext()) {
@@ -1007,20 +1154,31 @@ function buildTemplateItems(space, style, context = getGenerationContext()) {
     const adjustedRange = adjustPriceRange(priceRange, budgetRatio);
     const adjustedQuantity = adjustQuantity(quantity, context, space, category);
     const internalNote = buildInternalNote({ context, style, space, productNote, profile });
+    const productName = resolveContextualProductName(style, category, baseName, context, space);
+    const unitPrice = recommendedUnitPrice(adjustedRange);
     return {
       id: createId(),
+      code: "",
       space,
       category,
-      name: resolveContextualProductName(style, category, baseName, context, space),
-      spec: `常见尺寸：${size}；材质：${profile.material}；颜色：${profile.color}`,
+      productImage: createProductPlaceholderImage(category, style),
+      productImageUploaded: false,
+      productName,
+      size,
       quantity: adjustedQuantity,
       unit,
-      unitPrice: recommendedUnitPrice(adjustedRange),
-      priceRange: formatPriceRange(adjustedRange),
+      materialSuggestion: materialSuggestionForStyle(profile),
+      unitPrice,
       supplier: profile.supplier,
+      subtotal: adjustedQuantity * unitPrice,
       status: context.projectCategory === "工装" ? "采购询价中" : "待确认",
-      note: internalNote,
+      materialSampleImages: [],
       clientNote: buildClientNote(context, style, space),
+      clientVisible: true,
+      name: productName,
+      spec: size,
+      priceRange: materialSuggestionForStyle(profile),
+      note: internalNote,
       customerVisible: true,
     };
   });
@@ -1156,6 +1314,7 @@ function validateGeneratedTemplateResult(spaces, style) {
 function applyGeneratedItems(generatedItems, message, spacesToReplace = [], style = "", generatedSpaces = []) {
   const replaceSpaces = new Set(spacesToReplace);
   state.items = replaceSpaces.size ? replaceItemsForSpaces(generatedItems, replaceSpaces) : [...state.items, ...generatedItems];
+  renumberItems(state.items);
   if (style) state.style = style;
   pendingOnly = false;
   query = "";
@@ -1332,10 +1491,6 @@ function renderModeLibraryPanel() {
       `).join("")}
     </div>
   `;
-}
-
-function subtotal(item) {
-  return Number(item.quantity || 0) * Number(item.unitPrice || 0);
 }
 
 function parseInlineAmount(value) {
@@ -1548,6 +1703,54 @@ function removeUploadedImage(collection, id) {
   showToast(`${UPLOAD_COLLECTIONS[collection].label}已删除`);
 }
 
+function promptItemImageUpload(item, kind) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.multiple = kind === "material";
+  input.addEventListener("change", async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    try {
+      const images = await Promise.all(files.map(readImageFile));
+      if (kind === "product") {
+        item.productImage = images[0].dataUrl;
+        item.productImageUploaded = true;
+        showToast("已上传/替换软装产品彩图");
+      } else {
+        const existing = normalizeMaterialSampleImages(item.materialSampleImages);
+        item.materialSampleImages = [...existing, ...images].slice(0, 3);
+        showToast(`已上传 ${Math.min(images.length, 3)} 张材料样板贴图`);
+      }
+      saveState();
+      render();
+    } catch (error) {
+      console.warn("行内图片上传失败", error);
+      showToast(error.message || "图片上传失败，请重试");
+    }
+  }, { once: true });
+  input.click();
+}
+
+function removeProductImage(item) {
+  if (item.productImageStorageKey) deleteImageFromIndexedDb(item.productImageStorageKey).catch((error) => console.warn("删除产品图 IndexedDB 失败", error));
+  item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
+  item.productImageUploaded = false;
+  item.productImageStorageKey = "";
+  saveState();
+  render();
+  showToast("已恢复默认产品彩图占位图");
+}
+
+function removeMaterialSample(item, sampleId) {
+  const removed = normalizeMaterialSampleImages(item.materialSampleImages).find((image) => image.id === sampleId);
+  if (removed?.storageKey) deleteImageFromIndexedDb(removed.storageKey).catch((error) => console.warn("删除材料样板 IndexedDB 失败", error));
+  item.materialSampleImages = normalizeMaterialSampleImages(item.materialSampleImages).filter((image) => image.id !== sampleId);
+  saveState();
+  render();
+  showToast("已删除材料样板贴图");
+}
+
 function getAllSpacesForCurrentProject() {
   return state.projectCategory === "工装" ? COMMERCIAL_SPACES : RESIDENTIAL_SPACES;
 }
@@ -1583,8 +1786,9 @@ function getVisibleItems() {
   const searchQuery = query.trim().toLowerCase();
   return state.items.filter((item) => {
     const matchesPending = !pendingOnly || PENDING_STATUSES.includes(item.status);
-    const haystack = [item.space, item.category, item.name, item.spec, item.supplier, item.status].join(" ").toLowerCase();
-    return matchesPending && (!searchQuery || haystack.includes(searchQuery));
+    const matchesClientMode = !clientMode || (item.clientVisible ?? item.customerVisible) !== false;
+    const haystack = [item.space, item.category, item.productName || item.name, item.size || item.spec, item.materialSuggestion, item.supplier, item.status].join(" ").toLowerCase();
+    return matchesPending && matchesClientMode && (!searchQuery || haystack.includes(searchQuery));
   });
 }
 
@@ -1611,7 +1815,7 @@ function render() {
 
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
-    : '<tr><td colspan="14" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
+    : '<tr><td colspan="16" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
   updateBudgetSummary();
   renderTemplateLibrary();
@@ -1653,26 +1857,64 @@ function renderProjectCard(project) {
 
 function renderRow(item) {
   const safeId = item.id.replaceAll('"', "&quot;");
+  const code = getItemCode(item);
+  item.code = code;
+  const productName = item.productName || item.name || "未命名产品";
+  const size = item.size || extractSizeFromLegacySpec(item.spec) || item.spec || "按图纸复核";
+  const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || "待确认材质、颜色与工艺";
+  const productImage = item.productImage || createProductPlaceholderImage(item.category, getProjectStyle(state));
+  const materialSamples = normalizeMaterialSampleImages(item.materialSampleImages);
+  const clientVisible = item.clientVisible ?? item.customerVisible ?? true;
   return `
     <tr>
+      <td><strong class="item-code">${escapeHtml(code)}</strong></td>
       <td><strong>${escapeHtml(item.space)}</strong></td>
       <td>${escapeHtml(item.category)}</td>
-      <td class="item-cell">${escapeHtml(item.name)}</td>
-      <td>${escapeHtml(item.spec)}</td>
-      <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /> ${escapeHtml(item.unit)}</td>
-      <td class="price-range customer-hidden">${escapeHtml(item.priceRange || formatPriceRange([Number(item.unitPrice || 0), Number(item.unitPrice || 0)]))}</td>
+      <td>${renderProductImageCell(item, productImage, safeId)}</td>
+      <td class="item-cell">${escapeHtml(productName)}</td>
+      <td>${escapeHtml(size)}</td>
+      <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /></td>
+      <td class="material-cell">${escapeHtml(materialSuggestion)}</td>
       <td class="money customer-hidden"><input class="inline-price" type="text" inputmode="decimal" value="${escapeHtml(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
       <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
-      <td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
-      <td class="customer-hidden note-cell">${escapeHtml(item.note || "-")}</td>
+      <td class="internal-only"><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
+      <td>${renderMaterialSamplesCell(materialSamples, safeId)}</td>
       <td class="note-cell">${escapeHtml(item.clientNote || customerNote(item))}</td>
-      <td>${item.customerVisible === false ? "否" : "是"}</td>
-      <td class="actions-col row-actions">
+      <td class="internal-only">${clientVisible === false ? "否" : "是"}</td>
+      <td class="actions-col row-actions internal-only">
         <button type="button" class="mini-button" data-action="edit" data-id="${safeId}">编辑</button>
         <button type="button" class="mini-button danger" data-action="delete" data-id="${safeId}">删除</button>
       </td>
     </tr>`;
+}
+
+function renderProductImageCell(item, productImage, safeId) {
+  const status = item.productImageUploaded ? "已上传真实产品图" : "默认风格化占位图";
+  return `
+    <div class="product-image-cell">
+      <img class="boq-product-image" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" />
+      <div class="image-actions no-print">
+        <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传/替换</button>
+        <button type="button" class="mini-button danger" data-action="remove-product-image" data-id="${safeId}">删除</button>
+      </div>
+      <small>${escapeHtml(status)}</small>
+    </div>`;
+}
+
+function renderMaterialSamplesCell(samples, safeId) {
+  const thumbs = samples.map((image) => `
+    <span class="sample-thumb-wrap">
+      <img class="sample-thumb" src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.name || "材料样板贴图")}" />
+      <img class="sample-preview" src="${escapeHtml(image.dataUrl)}" alt="材料样板大图预览" />
+      <button type="button" class="sample-remove no-print" data-action="remove-material-sample" data-id="${safeId}" data-sample-id="${escapeHtml(image.id)}" aria-label="删除材料样板">×</button>
+    </span>`).join("");
+  return `
+    <div class="sample-board-cell">
+      <div class="sample-thumbs ${samples.length ? "" : "is-empty"}">${thumbs || "待上传材料样板"}</div>
+      <button type="button" class="mini-button no-print" data-action="upload-material-sample" data-id="${safeId}">上传样板</button>
+      <small>${samples.length ? `已上传 ${samples.length} 张` : "支持 1-3 张"}</small>
+    </div>`;
 }
 
 function statusClass(status) {
@@ -1700,36 +1942,51 @@ function openProductDialog(item = null) {
   elements.editingId.value = item?.id || "";
   elements.spaceInput.value = item?.space || "";
   elements.categoryInput.value = item?.category || "";
-  elements.nameInput.value = item?.name || "";
-  elements.specInput.value = item?.spec || "";
+  elements.nameInput.value = item?.productName || item?.name || "";
+  elements.specInput.value = item?.size || extractSizeFromLegacySpec(item?.spec) || item?.spec || "";
   elements.quantityInput.value = item?.quantity ?? 1;
   elements.unitInput.value = item?.unit || "件";
   elements.unitPriceInput.value = item?.unitPrice ?? 0;
-  elements.priceRangeInput.value = item?.priceRange || "";
+  elements.priceRangeInput.value = item?.materialSuggestion || item?.priceRange || extractMaterialSuggestionFromLegacySpec(item?.spec) || "";
   elements.statusInput.value = item?.status || "待确认";
   elements.supplierInput.value = item?.supplier || "";
   elements.noteInput.value = item?.note || "";
   elements.clientNoteInput.value = item?.clientNote || "";
-  elements.customerVisibleInput.checked = item?.customerVisible !== false;
+  elements.customerVisibleInput.checked = (item?.clientVisible ?? item?.customerVisible) !== false;
   updateFormSubtotal();
   elements.productDialog.showModal();
 }
 
 function collectFormItem() {
+  const existing = state.items.find((entry) => entry.id === elements.editingId.value) || {};
+  const quantity = Number(elements.quantityInput.value || 0);
+  const unitPrice = Number(elements.unitPriceInput.value || 0);
+  const productName = elements.nameInput.value.trim();
+  const size = elements.specInput.value.trim();
+  const materialSuggestion = elements.priceRangeInput.value.trim();
   return {
+    ...existing,
     id: elements.editingId.value || createId(),
     space: elements.spaceInput.value.trim(),
     category: elements.categoryInput.value.trim(),
-    name: elements.nameInput.value.trim(),
-    spec: elements.specInput.value.trim(),
-    quantity: Number(elements.quantityInput.value || 0),
+    productImage: existing.productImage || createProductPlaceholderImage(elements.categoryInput.value.trim(), getProjectStyle(state)),
+    productImageUploaded: Boolean(existing.productImageUploaded),
+    productName,
+    size,
+    quantity,
     unit: elements.unitInput.value.trim(),
-    unitPrice: Number(elements.unitPriceInput.value || 0),
-    priceRange: elements.priceRangeInput.value.trim(),
+    materialSuggestion,
+    unitPrice,
     supplier: elements.supplierInput.value.trim(),
+    subtotal: quantity * unitPrice,
     status: elements.statusInput.value,
-    note: elements.noteInput.value.trim(),
+    materialSampleImages: normalizeMaterialSampleImages(existing.materialSampleImages),
     clientNote: elements.clientNoteInput.value.trim(),
+    clientVisible: elements.customerVisibleInput.checked,
+    name: productName,
+    spec: size,
+    priceRange: materialSuggestion,
+    note: elements.noteInput.value.trim(),
     customerVisible: elements.customerVisibleInput.checked,
   };
 }
@@ -1741,8 +1998,8 @@ function updateFormSubtotal() {
 }
 
 function importSamples() {
-  const imported = sampleImportItems.map((item) => ({ ...item, id: createId() }));
-  state.items = [...state.items, ...imported];
+  const imported = sampleImportItems.map((item) => normalizeItem({ ...item, id: createId() }, 0, getProjectStyle(state)));
+  state.items = renumberItems([...state.items, ...imported]);
   pendingOnly = false;
   saveState();
   render();
@@ -1812,13 +2069,20 @@ function restoreSampleData() {
 }
 
 function exportCsv() {
+  renumberItems(state.items);
   const isClientReport = exportMode !== "internal";
   const headers = isClientReport
-    ? ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "预算小计", "状态", "客户备注", "是否客户可见"]
-    : ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注", "客户版备注", "是否客户可见"];
-  const rows = state.items.map((item) => isClientReport
-    ? [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", subtotal(item), item.status, item.clientNote || customerNote(item), item.customerVisible === false ? "否" : "是"]
-    : [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note, item.clientNote || customerNote(item), item.customerVisible === false ? "否" : "是"]);
+    ? ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "预算小计", "材料样板", "客户版备注"]
+    : ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "执行单价", "供应商", "预算小计", "状态", "材料样板", "客户版备注", "是否客户可见"];
+  const rows = state.items.filter((item) => !isClientReport || (item.clientVisible ?? item.customerVisible) !== false).map((item, index) => {
+    const productImageStatus = item.productImageUploaded ? "已上传" : "默认占位图";
+    const sampleCount = normalizeMaterialSampleImages(item.materialSampleImages).length;
+    const sampleStatus = sampleCount ? `已上传 ${sampleCount} 张` : "未上传";
+    const common = [formatItemCode(index), item.space, item.category, productImageStatus, item.productName || item.name, item.size || extractSizeFromLegacySpec(item.spec), item.quantity, item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec)];
+    return isClientReport
+      ? [...common, subtotal(item), sampleStatus, item.clientNote || customerNote(item)]
+      : [...common, item.unitPrice, item.supplier, subtotal(item), item.status, sampleStatus, item.clientNote || customerNote(item), (item.clientVisible ?? item.customerVisible) === false ? "否" : "是"];
+  });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
@@ -1992,11 +2256,15 @@ elements.tableBody.addEventListener("click", (event) => {
   if (!button) return;
   const item = state.items.find((entry) => entry.id === button.dataset.id);
   if (!item) return;
+  if (button.dataset.action === "upload-product-image") return promptItemImageUpload(item, "product");
+  if (button.dataset.action === "remove-product-image") return removeProductImage(item);
+  if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
+  if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
   if (button.dataset.action === "edit") {
     openProductDialog(item);
   }
   if (button.dataset.action === "delete" && window.confirm(`确认删除“${item.name}”？`)) {
-    state.items = state.items.filter((entry) => entry.id !== item.id);
+    state.items = renumberItems(state.items.filter((entry) => entry.id !== item.id));
     saveState();
     render();
     showToast("已删除产品");
@@ -2014,6 +2282,7 @@ elements.productForm.addEventListener("submit", (event) => {
     state.items.push(item);
     showToast("已新增产品");
   }
+  renumberItems(state.items);
   saveState();
   render();
   elements.productDialog.close();

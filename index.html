@@ -306,20 +306,22 @@
               <table>
                 <thead>
                   <tr>
+                    <th>编号</th>
                     <th>空间</th>
                     <th>品类</th>
-                    <th>产品名称 / 材质说明</th>
-                    <th>常见尺寸 / 材质 / 颜色</th>
+                    <th>软装产品彩图</th>
+                    <th>产品名称</th>
+                    <th>常见尺寸</th>
                     <th>数量</th>
-                    <th class="customer-hidden">建议单价区间</th>
+                    <th>材质建议</th>
                     <th class="customer-hidden">执行单价</th>
                     <th class="customer-hidden">供应商</th>
                     <th>预算小计</th>
-                    <th>状态</th>
-                    <th class="customer-hidden">内部备注</th>
+                    <th class="internal-only">状态</th>
+                    <th>材料样板贴图</th>
                     <th>客户版备注</th>
-                    <th>是否客户可见</th>
-                    <th class="actions-col">操作</th>
+                    <th class="internal-only">是否客户可见</th>
+                    <th class="actions-col internal-only">操作</th>
                   </tr>
                 </thead>
                 <tbody id="boqTableBody"></tbody>
@@ -380,11 +382,11 @@
         <div class="form-grid">
           <label>空间<input id="spaceInput" required /></label>
           <label>品类<input id="categoryInput" required /></label>
-          <label class="span-2">产品名称 / 材质说明<input id="nameInput" required /></label>
-          <label class="span-2">常见尺寸 / 材质 / 颜色<input id="specInput" required /></label>
+          <label class="span-2">产品名称<input id="nameInput" required /></label>
+          <label class="span-2">常见尺寸<input id="specInput" required /></label>
           <label>数量<input id="quantityInput" type="number" min="0" step="0.01" required /></label>
           <label>单位<input id="unitInput" required placeholder="套 / 组 / 米" /></label>
-          <label>建议单价区间<input id="priceRangeInput" placeholder="¥ 3,000 - 5,000" /></label>
+          <label>材质建议<input id="priceRangeInput" placeholder="胡桃木框架 / 复古皮革 / 焦糖棕" /></label>
           <label>执行单价<input id="unitPriceInput" type="number" min="0" step="0.01" required /></label>
           <label>状态
             <select id="statusInput">
@@ -396,7 +398,7 @@
             </select>
           </label>
           <label class="span-2">供应商<input id="supplierInput" /></label>
-          <label class="span-2">内部备注<textarea id="noteInput" rows="3"></textarea></label>
+          <label class="span-2">材料样板说明<textarea id="noteInput" rows="3" placeholder="材料样板图片请在表格行内上传，可补充样板说明"></textarea></label>
           <label class="span-2">客户版备注<textarea id="clientNoteInput" rows="2"></textarea></label>
           <label class="checkbox-field"><input id="customerVisibleInput" type="checkbox" checked /> 是否客户可见</label>
         </div>
