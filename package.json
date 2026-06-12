@@ -2,9 +2,9 @@
   "name": "soft-decoration-boq-generator",
   "version": "0.1.0",
   "private": true,
-  "description": "软装清单自动生成工具的设计师后台界面原型",
+  "description": "可在浏览器本地保存的软装 BOQ 清单管理工具",
   "scripts": {
     "start": "python3 -m http.server 4173",
-    "check": "python3 - <<'PY'\nfrom pathlib import Path\nfor file in ['index.html', 'src/styles.css']:\n    text = Path(file).read_text(encoding='utf-8')\n    assert text.strip(), f'{file} is empty'\nprint('static interface files are present and readable')\nPY"
+    "check": "python3 - <<'PY'\nfrom pathlib import Path\nfor file in ['index.html', 'src/styles.css', 'src/app.js']:\n    text = Path(file).read_text(encoding='utf-8')\n    assert text.strip(), f'{file} is empty'\nprint('static application files are present and readable')\nPY\nnode --check src/app.js"
   }
 }

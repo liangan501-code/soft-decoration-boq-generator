@@ -18,40 +18,42 @@
         </div>
         <nav class="nav-list">
           <a class="active" href="#overview">⌘ 项目总览</a>
-          <a href="#scheme">✦ 方案与色板</a>
+          <a href="#project">✦ 项目信息</a>
           <a href="#boq">▦ 清单与预算</a>
           <a href="#purchase">◈ 采购进度</a>
           <a href="#report">☷ 客户汇报</a>
         </nav>
         <section class="side-card">
           <span class="side-icon">✧</span>
-          <p>AI 已识别 7 项可降本替代品，预计不影响整体设计调性。</p>
-          <button>查看优化建议</button>
+          <p>数据已自动保存在本机浏览器，刷新页面后仍会保留项目与清单。</p>
+          <button type="button" id="resetDemoButton">恢复示例数据</button>
         </section>
       </aside>
 
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">软装全案 · 客户汇报版</p>
-            <h1>滨江私宅 240㎡ 软装 BOQ 管理</h1>
+            <p class="eyebrow">软装全案 · 可操作 BOQ</p>
+            <h1 id="pageTitle">软装 BOQ 管理</h1>
           </div>
-          <div class="top-actions">
-            <div class="search">⌕ <span>搜索空间、品类、供应商</span></div>
-            <button class="icon-button" aria-label="通知">⌁</button>
-            <button class="ghost-button">⇧ 导入清单</button>
-            <button class="primary-button">⇩ 导出汇报表</button>
+          <div class="top-actions no-print">
+            <label class="search" for="searchInput">⌕
+              <input id="searchInput" type="search" placeholder="搜索空间、品类、供应商" />
+            </label>
+            <button class="ghost-button" type="button" id="exportCsvTopButton">⇩ 导出 CSV</button>
+            <button class="primary-button" type="button" id="printTopButton">生成客户版 PDF</button>
           </div>
         </header>
 
         <section class="hero-panel" id="overview">
           <div class="hero-copy">
-            <span class="pill">✓ 方案深化中 · 采购前复核</span>
+            <span class="pill" id="projectPill">✓ 方案深化中 · 采购前复核</span>
             <h2>以设计逻辑组织预算，让客户看得懂，也让采购能直接执行。</h2>
-            <p>将空间、品类、规格、数量、供应商、预算与状态集中管理，支持客户汇报、内部核价、采购跟进三种使用场景。</p>
-            <div class="hero-actions">
-              <button class="primary-button">生成客户版 PDF</button>
-              <button class="secondary-button">筛选待确认项</button>
+            <p id="projectSummary">将空间、品类、规格、数量、供应商、预算与状态集中管理，支持客户汇报、内部核价、采购跟进三种使用场景。</p>
+            <div class="hero-actions no-print">
+              <button class="primary-button" type="button" id="printButton">生成客户版 PDF</button>
+              <button class="secondary-button" type="button" id="filterAttentionButton" aria-pressed="false">筛选待确认项</button>
+              <button class="ghost-button" type="button" id="exportCsvButton">导出 CSV</button>
             </div>
           </div>
           <div class="mood-board" id="scheme" aria-label="软装情绪板">
@@ -65,24 +67,44 @@
         <section class="metrics-grid" aria-label="项目关键指标">
           <article class="metric-card gold">
             <p>项目总预算</p>
-            <strong>¥ 486,200</strong>
-            <span>较初稿节省 8.6%</span>
+            <strong id="totalBudgetMetric">¥ 0</strong>
+            <span id="budgetHint">来自所有清单小计</span>
           </article>
           <article class="metric-card sand">
             <p>已确认品类</p>
-            <strong>128 项</strong>
-            <span>家具 / 灯具 / 布艺</span>
+            <strong id="confirmedMetric">0 项</strong>
+            <span>状态为“客户已确认”的产品</span>
           </article>
           <article class="metric-card sage">
             <p>待采购金额</p>
-            <strong>¥ 318,740</strong>
-            <span>含 12 项替代方案</span>
+            <strong id="pendingAmountMetric">¥ 0</strong>
+            <span>待确认 / 询价 / 复核尺寸</span>
           </article>
           <article class="metric-card ink">
-            <p>预计交付周期</p>
-            <strong>32 天</strong>
-            <span>软装进场倒计时</span>
+            <p>目标预算</p>
+            <strong id="targetBudgetMetric">¥ 0</strong>
+            <span id="budgetBalanceMetric">预算差额 ¥ 0</span>
           </article>
+        </section>
+
+        <section class="panel project-panel" id="project">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Project Profile</p>
+              <h3>项目信息</h3>
+            </div>
+            <button class="ghost-button no-print" type="button" id="newProjectButton">新增项目</button>
+          </div>
+          <form class="project-form no-print" id="projectForm">
+            <label>项目名称<input name="name" required placeholder="如：滨江私宅" /></label>
+            <label>客户名称<input name="client" placeholder="如：李女士" /></label>
+            <label>项目类型<input name="type" placeholder="如：私宅 / 样板间" /></label>
+            <label>面积（㎡）<input name="area" type="number" min="0" step="1" placeholder="240" /></label>
+            <label>预算（元）<input name="budget" type="number" min="0" step="100" placeholder="500000" /></label>
+            <label>风格<input name="style" placeholder="如：现代自然 / 侘寂" /></label>
+            <button class="primary-button" type="submit">保存项目信息</button>
+          </form>
+          <div class="project-readout" id="projectReadout"></div>
         </section>
 
         <section class="content-grid">
@@ -92,76 +114,38 @@
                 <p class="eyebrow">Bill of Quantities</p>
                 <h3>软装清单明细</h3>
               </div>
-              <button class="ghost-button">客户版字段⌄</button>
+              <div class="toolbar no-print">
+                <span class="filter-chip" id="filterStateLabel">显示全部产品</span>
+                <button class="secondary-button" type="button" id="addItemButton">＋ 新增产品</button>
+              </div>
+            </div>
+            <div class="client-print-title print-only">
+              <h2 id="printProjectTitle">客户版软装清单</h2>
+              <p id="printProjectMeta"></p>
             </div>
             <div class="table-wrap">
-              <table>
+              <table id="boqTable">
                 <thead>
                   <tr>
                     <th>空间</th>
                     <th>品类</th>
-                    <th>产品名称 / 材质说明</th>
-                    <th>规格与配置</th>
+                    <th>产品名称</th>
+                    <th>规格尺寸</th>
+                    <th>材质</th>
+                    <th>颜色</th>
                     <th>数量</th>
-                    <th>供应商</th>
-                    <th>预算小计</th>
+                    <th class="private-field">供应商</th>
+                    <th>单价</th>
+                    <th>小计</th>
                     <th>状态</th>
+                    <th class="private-field">备注</th>
+                    <th class="no-print action-col">操作</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>客厅</strong></td>
-                    <td>主沙发</td>
-                    <td class="item-cell">意式低靠背模块沙发 / 暖灰羊毛混纺</td>
-                    <td>3200 × 980 × 680mm，含抱枕 4 只</td>
-                    <td>1 套</td>
-                    <td>Maison&Co 定制工厂</td>
-                    <td class="money">¥ 42,800</td>
-                    <td><span class="status confirmed">客户已确认</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>餐厅</strong></td>
-                    <td>吊灯</td>
-                    <td class="item-cell">手工玻璃线性吊灯 / 香槟金金属件</td>
-                    <td>L1800mm，3000K 暖光，支持调光</td>
-                    <td>1 组</td>
-                    <td>北欧灯饰精选</td>
-                    <td class="money">¥ 16,500</td>
-                    <td><span class="status pending">采购询价中</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>主卧</strong></td>
-                    <td>窗帘</td>
-                    <td class="item-cell">双层遮光帘 + 纱帘 / 杏仁米色</td>
-                    <td>墙到墙安装，遮光率 92%，含轨道</td>
-                    <td>28 米</td>
-                    <td>织物实验室</td>
-                    <td class="money">¥ 24,360</td>
-                    <td><span class="status review">需复核尺寸</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>玄关</strong></td>
-                    <td>艺术品</td>
-                    <td class="item-cell">抽象肌理画 / 原创手作装裱</td>
-                    <td>900 × 1200mm，胡桃木窄边框</td>
-                    <td>1 幅</td>
-                    <td>Gallery 19</td>
-                    <td class="money">¥ 9,800</td>
-                    <td><span class="status option">备选推荐</span></td>
-                  </tr>
-                  <tr>
-                    <td><strong>书房</strong></td>
-                    <td>单椅</td>
-                    <td class="item-cell">皮革阅读椅 / 焦糖棕植鞣皮</td>
-                    <td>含脚踏，黑钛金属脚，现货交付</td>
-                    <td>1 把</td>
-                    <td>HABITAT 买手店</td>
-                    <td class="money">¥ 13,900</td>
-                    <td><span class="status confirmed">客户已确认</span></td>
-                  </tr>
-                </tbody>
+                <tbody id="boqTableBody"></tbody>
               </table>
             </div>
+            <p class="empty-state" id="emptyState" hidden>暂无匹配产品，请新增清单或取消筛选。</p>
           </article>
 
           <aside class="panel insight-panel" id="purchase">
@@ -172,39 +156,81 @@
               </div>
               <span class="calendar-icon">◷</span>
             </div>
-            <div class="timeline">
+            <div class="timeline" id="timelineSummary">
               <div class="timeline-item">
-                <time>06/14</time>
+                <time>待确认</time>
                 <div>
-                  <strong>客户汇报会</strong>
-                  <p>输出带效果参考、预算拆分和采购优先级的正式 BOQ。</p>
+                  <strong id="attentionCount">0 项需跟进</strong>
+                  <p>包含待确认、采购询价中、需复核尺寸三类清单。</p>
                 </div>
               </div>
               <div class="timeline-item">
-                <time>06/18</time>
+                <time>已确认</time>
                 <div>
-                  <strong>供应商比价截止</strong>
-                  <p>收齐主材、灯具、布艺三类报价并锁定可替换项。</p>
+                  <strong id="confirmedCountSide">0 项可执行</strong>
+                  <p>可直接进入下单、排产或物流协调。</p>
                 </div>
               </div>
               <div class="timeline-item">
-                <time>06/25</time>
+                <time>预算</time>
                 <div>
-                  <strong>首批采购下单</strong>
-                  <p>优先处理定制周期较长的家具与窗帘品类。</p>
+                  <strong id="budgetUsageSide">¥ 0</strong>
+                  <p>系统根据数量与单价自动计算小计及汇总。</p>
                 </div>
               </div>
             </div>
             <div class="purchase-card">
               <span>✓</span>
               <div>
-                <strong>采购可执行度 86%</strong>
-                <p>规格字段完整，仍有 3 项需补充安装条件与现场尺寸。</p>
+                <strong>客户版打印已就绪</strong>
+                <p>打印 / 另存为 PDF 时会隐藏供应商、内部备注和操作列，仅保留客户所需字段。</p>
               </div>
             </div>
           </aside>
         </section>
       </section>
     </main>
+
+    <dialog class="item-dialog" id="itemDialog">
+      <form method="dialog" class="item-form" id="itemForm">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Product Item</p>
+            <h3 id="dialogTitle">新增软装产品</h3>
+          </div>
+          <button class="icon-button" value="cancel" type="button" id="closeDialogButton" aria-label="关闭">×</button>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="form-grid">
+          <label>空间<input name="space" required placeholder="客厅" /></label>
+          <label>品类<input name="category" required placeholder="主沙发" /></label>
+          <label class="wide">产品名称<input name="productName" required placeholder="意式低靠背模块沙发" /></label>
+          <label class="wide">规格尺寸<input name="spec" placeholder="3200 × 980 × 680mm" /></label>
+          <label>材质<input name="material" placeholder="羊毛混纺 / 木饰面" /></label>
+          <label>颜色<input name="color" placeholder="暖灰 / 杏仁米" /></label>
+          <label>数量<input name="quantity" type="number" min="0" step="0.01" required /></label>
+          <label>供应商<input name="supplier" placeholder="Maison&Co 定制工厂" /></label>
+          <label>单价（元）<input name="unitPrice" type="number" min="0" step="0.01" required /></label>
+          <label>状态
+            <select name="status">
+              <option>待确认</option>
+              <option>客户已确认</option>
+              <option>采购询价中</option>
+              <option>需复核尺寸</option>
+              <option>备选推荐</option>
+              <option>已下单</option>
+            </select>
+          </label>
+          <label class="wide">备注<textarea name="notes" rows="3" placeholder="内部备注、安装条件或替代方案说明"></textarea></label>
+        </div>
+        <div class="dialog-total">小计：<strong id="dialogSubtotal">¥ 0</strong></div>
+        <div class="dialog-actions">
+          <button class="ghost-button" type="button" id="cancelItemButton">取消</button>
+          <button class="primary-button" type="submit">保存产品</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="src/app.js" defer></script>
   </body>
 </html>
