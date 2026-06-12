@@ -34,14 +34,24 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">软装全案 · 客户汇报版</p>
+            <p class="eyebrow" id="reportModeLabel">软装全案 · 客户汇报版</p>
             <h1 id="projectTitle">滨江私宅 240㎡ 软装 BOQ 管理</h1>
+            <p class="project-meta" id="projectMeta">1 个项目 · 当前 0 项清单</p>
           </div>
           <div class="top-actions">
+            <label class="project-switcher" for="projectSelect">项目
+              <select id="projectSelect" aria-label="切换项目"></select>
+            </label>
             <label class="search" for="searchInput">⌕ <input id="searchInput" type="search" placeholder="搜索空间、品类、供应商" /></label>
-            <button class="icon-button" type="button" id="newProjectBtn" aria-label="新增项目">＋</button>
+            <button class="ghost-button" type="button" id="newProjectBtn">＋ 新建项目</button>
             <button class="ghost-button" type="button" id="importBtn">⇧ 导入清单</button>
-            <button class="primary-button" type="button" id="exportBtn">⇩ 导出汇报表</button>
+            <label class="export-mode" for="exportModeInput">导出
+              <select id="exportModeInput">
+                <option value="client">客户汇报版</option>
+                <option value="internal">内部采购版</option>
+              </select>
+            </label>
+            <button class="primary-button" type="button" id="exportBtn">⇩ 导出清单</button>
           </div>
         </header>
 
@@ -102,7 +112,7 @@
                 <option>次卧</option>
                 <option>玄关</option>
                 <option>洽谈区</option>
-                <option>样板间公区</option>
+                <option>书房</option>
               </select>
             </label>
             <label>风格
@@ -116,7 +126,23 @@
                 <option>黑金风</option>
               </select>
             </label>
-            <button class="primary-button" type="button" id="generateTemplateBtn">✦ 一键生成清单</button>
+            <button class="primary-button" type="button" id="generateTemplateBtn">✦ 生成当前空间</button>
+            <button class="secondary-button" type="button" id="generateAllSpacesBtn">✦ 一键生成空间清单</button>
+          </div>
+        </section>
+
+        <section class="template-library panel" aria-label="软装清单模板库">
+          <div class="panel-header compact">
+            <div>
+              <p class="eyebrow">Template Library</p>
+              <h3>软装清单模板库</h3>
+            </div>
+            <span>7 空间 × 7 风格</span>
+          </div>
+          <div class="library-grid">
+            <article><strong>空间模板</strong><p>客厅、餐厅、主卧、次卧、玄关、洽谈区、书房，自动带出常见软装品类与数量。</p></article>
+            <article><strong>风格推荐</strong><p>奶油风、中古风、轻奢风、法式、雅奢、度假风、黑金风，自动匹配材质、颜色与供应商备注。</p></article>
+            <article><strong>双模式交付</strong><p>客户汇报版隐藏供应商与内部成本；内部采购版保留执行单价、供应商和采购备注。</p></article>
           </div>
         </section>
 
