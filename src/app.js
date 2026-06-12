@@ -189,8 +189,24 @@ const spaceTemplates = {
   ],
 };
 
+const librarySpaces = Object.keys(spaceTemplates);
+const libraryStyles = Object.keys(styleProfiles);
+const deliveryModes = {
+  client: {
+    title: "客户汇报版",
+    description: "隐藏供应商、内部备注、采购成本，适合客户评审与方案汇报。",
+    fields: ["空间", "品类", "产品名称", "尺寸材质", "预算小计", "状态"],
+  },
+  internal: {
+    title: "内部采购版",
+    description: "显示供应商、单价、内部备注、采购状态，适合采购询价与落地执行。",
+    fields: ["供应商", "执行单价", "内部备注", "采购状态"],
+  },
+};
+
 const workspace = loadWorkspace();
 let state = getActiveProject();
+let activeLibraryCard = null;
 
 const elements = {
   projectTitle: document.querySelector("#projectTitle"),
@@ -208,6 +224,8 @@ const elements = {
   templateStyleInput: document.querySelector("#templateStyleInput"),
   generateTemplateBtn: document.querySelector("#generateTemplateBtn"),
   generateAllSpacesBtn: document.querySelector("#generateAllSpacesBtn"),
+  templateLibraryCards: document.querySelector("#templateLibraryCards"),
+  templateLibraryPanel: document.querySelector("#templateLibraryPanel"),
   exportModeInput: document.querySelector("#exportModeInput"),
   newProjectBtn: document.querySelector("#newProjectBtn"),
   importBtn: document.querySelector("#importBtn"),
@@ -351,6 +369,142 @@ function generateAllSpacesTemplate() {
   appendGeneratedItems(generatedItems, `已一键生成 ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`);
 }
 
+function applyLibraryTemplate() {
+  const space = elements.templateSpaceInput.value;
+  const style = elements.templateStyleInput.value;
+  const generatedItems = buildTemplateItems(space, style);
+  appendGeneratedItems(generatedItems, `已应用模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`);
+}
+
+function setLibraryCard(card) {
+  activeLibraryCard = card;
+  renderTemplateLibrary();
+}
+
+function selectLibrarySpace(space) {
+  elements.templateSpaceInput.value = space;
+  activeLibraryCard = "space";
+  renderTemplateLibrary();
+  showToast(`已切换空间模板：${space}`);
+}
+
+function selectLibraryStyle(style) {
+  elements.templateStyleInput.value = style;
+  activeLibraryCard = "style";
+  renderTemplateLibrary();
+  showToast(`已切换风格推荐：${style}`);
+}
+
+function selectDeliveryMode(mode) {
+  state.exportMode = mode;
+  state.clientMode = mode === "client";
+  activeLibraryCard = "mode";
+  saveState();
+  render();
+  showToast(`已切换为${deliveryModes[mode].title}`);
+}
+
+function renderTemplateLibrary() {
+  const cards = elements.templateLibraryCards.querySelectorAll("[data-library-card]");
+  cards.forEach((card) => {
+    const isActive = card.dataset.libraryCard === activeLibraryCard;
+    card.classList.toggle("is-active", isActive);
+    card.setAttribute("aria-expanded", String(isActive));
+  });
+
+  if (!activeLibraryCard) {
+    elements.templateLibraryPanel.innerHTML = "";
+    return;
+  }
+
+  if (activeLibraryCard === "style") {
+    renderStyleLibraryPanel();
+    return;
+  }
+
+  if (activeLibraryCard === "mode") {
+    renderModeLibraryPanel();
+    return;
+  }
+
+  renderSpaceLibraryPanel();
+}
+
+function renderSpaceLibraryPanel() {
+  const selectedSpace = elements.templateSpaceInput.value;
+  const categories = spaceTemplates[selectedSpace] || [];
+  elements.templateLibraryPanel.innerHTML = `
+    <div class="library-panel-header">
+      <div>
+        <p class="eyebrow">Space Template</p>
+        <h4>${escapeHtml(selectedSpace)}常见软装品类预览</h4>
+      </div>
+      <button class="primary-button" type="button" data-library-action="apply">一键应用模板</button>
+    </div>
+    <div class="option-pills" role="list" aria-label="选择空间模板">
+      ${librarySpaces.map((space) => `
+        <button class="option-pill ${space === selectedSpace ? "is-selected" : ""}" type="button" data-library-space="${escapeHtml(space)}" role="listitem">${escapeHtml(space)}</button>
+      `).join("")}
+    </div>
+    <div class="preview-grid space-preview">
+      ${categories.map(([category, baseName, size, quantity, unit, priceRange]) => `
+        <article class="preview-card">
+          <span>${escapeHtml(category)}</span>
+          <strong>${escapeHtml(baseName)}</strong>
+          <p>${escapeHtml(size)} · ${quantity}${escapeHtml(unit)}</p>
+          <small>${escapeHtml(formatPriceRange(priceRange))}</small>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderStyleLibraryPanel() {
+  const selectedStyle = elements.templateStyleInput.value;
+  const profile = styleProfiles[selectedStyle];
+  elements.templateLibraryPanel.innerHTML = `
+    <div class="library-panel-header">
+      <div>
+        <p class="eyebrow">Style Recommendation</p>
+        <h4>${escapeHtml(selectedStyle)}材质、颜色与供应商备注</h4>
+      </div>
+      <button class="primary-button" type="button" data-library-action="apply">一键应用模板</button>
+    </div>
+    <div class="option-pills" role="list" aria-label="选择风格推荐">
+      ${libraryStyles.map((style) => `
+        <button class="option-pill ${style === selectedStyle ? "is-selected" : ""}" type="button" data-library-style="${escapeHtml(style)}" role="listitem">${escapeHtml(style)}</button>
+      `).join("")}
+    </div>
+    <div class="preview-grid style-preview">
+      <article class="preview-card emphasis"><span>推荐材质</span><strong>${escapeHtml(profile.material)}</strong><p>${escapeHtml(profile.note)}</p></article>
+      <article class="preview-card"><span>推荐颜色</span><strong>${escapeHtml(profile.color)}</strong><p>将颜色同步写入上方所选空间的每一项规格说明。</p></article>
+      <article class="preview-card"><span>供应商备注</span><strong>${escapeHtml(profile.supplier)}</strong><p>生成清单时自动写入供应商，并附带风格采购注意事项。</p></article>
+    </div>
+  `;
+}
+
+function renderModeLibraryPanel() {
+  const selectedMode = state.exportMode || "client";
+  elements.templateLibraryPanel.innerHTML = `
+    <div class="library-panel-header">
+      <div>
+        <p class="eyebrow">Delivery Mode</p>
+        <h4>当前导出模式：${escapeHtml(deliveryModes[selectedMode].title)}</h4>
+      </div>
+      <button class="primary-button" type="button" data-library-action="apply">一键应用模板</button>
+    </div>
+    <div class="mode-options" aria-label="选择交付模式">
+      ${Object.entries(deliveryModes).map(([mode, config]) => `
+        <button class="mode-option ${mode === selectedMode ? "is-selected" : ""}" type="button" data-library-mode="${mode}">
+          <strong>${escapeHtml(config.title)}</strong>
+          <p>${escapeHtml(config.description)}</p>
+          <span>${config.fields.map(escapeHtml).join(" · ")}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function subtotal(item) {
   return Number(item.quantity || 0) * Number(item.unitPrice || 0);
 }
@@ -393,6 +547,7 @@ function render() {
   elements.confirmedCount.textContent = `${confirmed} 项`;
   elements.pendingAmount.textContent = money(pendingTotal);
   elements.purchaseScore.textContent = `${score}%`;
+  renderTemplateLibrary();
 }
 
 function renderRow(item) {
@@ -599,6 +754,41 @@ elements.cancelDialogBtn.addEventListener("click", () => elements.productDialog.
 elements.addProductBtn.addEventListener("click", () => openProductDialog());
 elements.generateTemplateBtn.addEventListener("click", generateTemplate);
 elements.generateAllSpacesBtn.addEventListener("click", generateAllSpacesTemplate);
+elements.templateSpaceInput.addEventListener("change", () => {
+  activeLibraryCard = "space";
+  renderTemplateLibrary();
+});
+elements.templateStyleInput.addEventListener("change", () => {
+  activeLibraryCard = "style";
+  renderTemplateLibrary();
+});
+elements.templateLibraryCards.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-library-card]");
+  if (!card) return;
+  setLibraryCard(card.dataset.libraryCard);
+});
+elements.templateLibraryPanel.addEventListener("click", (event) => {
+  const spaceButton = event.target.closest("[data-library-space]");
+  if (spaceButton) {
+    selectLibrarySpace(spaceButton.dataset.librarySpace);
+    return;
+  }
+
+  const styleButton = event.target.closest("[data-library-style]");
+  if (styleButton) {
+    selectLibraryStyle(styleButton.dataset.libraryStyle);
+    return;
+  }
+
+  const modeButton = event.target.closest("[data-library-mode]");
+  if (modeButton) {
+    selectDeliveryMode(modeButton.dataset.libraryMode);
+    return;
+  }
+
+  const applyButton = event.target.closest("[data-library-action='apply']");
+  if (applyButton) applyLibraryTemplate();
+});
 elements.newProjectBtn.addEventListener("click", addProject);
 elements.projectSelect.addEventListener("change", (event) => switchProject(event.target.value));
 elements.exportModeInput.addEventListener("change", (event) => {
