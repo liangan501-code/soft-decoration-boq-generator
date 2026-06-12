@@ -8,15 +8,30 @@ function createId() {
 }
 
 const PENDING_STATUSES = ["待确认", "采购询价中", "需复核尺寸"];
+const REQUIRED_UPLOAD_MESSAGE = "请先上传平面图和效果图，系统需要根据图纸与空间效果生成清单。";
+const PROJECT_SUBTYPES = {
+  家装: ["私宅", "大平层", "别墅", "复式", "公寓"],
+  工装: ["样板间", "售楼处", "会所", "酒店", "办公空间", "商业公区"],
+};
+const RESIDENTIAL_SPACES = ["客厅", "餐厅", "主卧", "次卧", "玄关", "书房"];
+const COMMERCIAL_SPACES = ["样板间", "售楼处", "洽谈区", "沙盘区", "VIP室", "会所休闲区", "公区"];
+const UPLOAD_COLLECTIONS = {
+  floorPlans: { label: "平面图", status: "floorPlanUploadStatus", preview: "floorPlanPreview" },
+  renderings: { label: "效果图", status: "renderingUploadStatus", preview: "renderingPreview" },
+};
 
 const defaultProject = () => ({
   id: createId(),
   name: "滨江私宅 240㎡ 软装 BOQ 管理",
   clientName: "",
+  projectCategory: "家装",
+  projectSubtype: "私宅",
   projectType: "私宅软装",
   area: 240,
   style: "雅奢",
   targetBudget: 0,
+  remark: "",
+  attachments: { floorPlans: [], renderings: [] },
   items: [
     {
       id: createId(),
@@ -133,6 +148,9 @@ const styleProfiles = {
   雅奢: { adjective: "雅奢", material: "大理石、真皮、拉丝金属、混纺面料", color: "暖灰 / 深咖 / 古铜金", supplier: "Elegant Bespoke", note: "以低饱和色和精细收口体现品质，预留定制打样周期。" },
   度假风: { adjective: "度假感", material: "藤编、柚木、亚麻、手工陶", color: "沙色 / 海盐白 / 棕榈绿", supplier: "Resort Home Studio", note: "强调自然肌理和松弛感，软包建议选择耐污易打理面料。" },
   黑金风: { adjective: "黑金", material: "黑色烤漆、黑钛金属、深色岩板、皮革", color: "曜石黑 / 古铜金 / 深灰", supplier: "Noir Gold Works", note: "控制反光材质比例，灯光色温建议 2700K-3000K。" },
+  现代东方: { adjective: "现代东方", material: "胡桃木、宣纸肌理、亚麻、深色石材", color: "烟墨灰 / 米白 / 暖木色", supplier: "Oriental Modern Studio", note: "以留白、比例和材质肌理表达东方气质，避免符号堆砌。" },
+  香奈儿风: { adjective: "香奈儿感", material: "粗花呢、黑白石材、珍珠金属、丝绒", color: "珍珠白 / 黑色 / 香槟金", supplier: "Coco Luxe Décor", note: "控制黑白对比和金属点缀比例，软装细节强调精致边线。" },
+  艺术馆风: { adjective: "艺术馆感", material: "微水泥、洞石、金属、艺术玻璃", color: "暖白 / 石灰 / 低饱和焦点色", supplier: "Gallery Home Lab", note: "强调留白、灯光洗墙和艺术品尺度，保留展陈呼吸感。" },
 };
 
 
@@ -410,6 +428,53 @@ const spaceTemplates = {
     ["台灯", "书桌工作台灯", "H420-560mm，3000K-4000K", 1, "盏", [1800, 9800], "建议具备局部调光，兼顾工作与阅读。"],
     ["装饰摆件", "书柜陈设组合", "艺术书 + 雕塑 + 收纳盒", 1, "组", [2600, 12000], "按三角构图分层陈列，保留 30% 留白。"],
   ],
+  样板间: [
+    ["主沙发", "样板间定制沙发", "3200 × 980 × 720mm", 1, "套", [38000, 88000], "优先保证展示面完整和拍照角度，坐感与比例同时复核。"],
+    ["茶几", "岩板展示茶几", "1200 × 700 × 360mm", 1, "张", [12000, 36000], "材质需耐磨易清洁，适配批量交付。"],
+    ["边几", "金属边几", "Φ450 × 520mm", 2, "只", [3600, 9800], "用于形成镜头前景和洽谈动线停顿。"],
+    ["地毯", "艺术地毯", "2600 × 3600mm", 1, "张", [12000, 32000], "兼顾展示效果、耐踩踏和拍摄质感。"],
+    ["装饰画", "大幅装饰画", "1200 × 1800mm", 1, "幅", [6800, 26000], "作为传播主画面，需与效果图主色统一。"],
+    ["雕塑摆件", "雕塑摆件组合", "台面 + 落地组合", 1, "组", [4800, 22000], "增强售楼样板间记忆点，注意交付防损。"],
+    ["花艺", "空间花艺", "茶几 + 玄关 + 餐桌", 1, "组", [3600, 16000], "拍摄前统一整理，选择可维护仿真花材。"],
+    ["氛围灯具", "氛围灯具组合", "落地灯 / 台灯 2700K-3000K", 1, "组", [6800, 28000], "补足夜景和拍照层次，避免眩光。"],
+  ],
+  售楼处: [
+    ["接待台陈设", "接待台艺术陈设", "托盘 + 花器 + 品牌书", 1, "组", [6800, 26000], "体现项目第一印象，材质需耐用易维护。"],
+    ["洽谈桌", "洽谈区圆桌", "Φ900-1100 × 750mm", 4, "张", [6800, 22000], "满足多组客户并行洽谈，便于批量采购。"],
+    ["洽谈椅", "耐磨洽谈椅", "560 × 580 × 780mm", 16, "把", [1800, 6800], "坐感、耐磨、清洁便利性优先。"],
+    ["艺术装置", "售楼处艺术装置", "按端景定制", 1, "组", [18000, 88000], "强化传播记忆点，需提前确认交付周期。"],
+    ["绿植花艺", "公区绿植花艺", "H600-1800mm 组合", 1, "批", [8000, 36000], "用于组织动线和柔化空间尺度。"],
+  ],
+  洽谈区: [
+    ["洽谈桌", "圆形洽谈桌", "Φ900 × 750mm", 1, "张", [6800, 26000], "满足 3-4 人沟通和方案摊开展示。"],
+    ["洽谈椅", "舒适洽谈椅", "560 × 580 × 780mm", 4, "把", [1800, 7800], "坐感优先，面料需耐磨。"],
+    ["地毯", "洽谈区地毯", "2000 × 2000mm", 1, "张", [4200, 16000], "用于界定洽谈区边界。"],
+    ["吊灯", "洽谈区装饰灯", "Φ600-800mm，3000K", 1, "盏", [3800, 16000], "避免眩光直射客户视线。"],
+    ["绿植", "大型造景绿植", "H1200-1600mm", 1, "组", [1800, 8600], "可提升空间停留感和亲和度。"],
+  ],
+  沙盘区: [
+    ["沙盘围合软装", "沙盘区围合陈设", "导览围合 + 艺术托盘", 1, "组", [8000, 32000], "不遮挡沙盘视线，组织客户观看动线。"],
+    ["导视摆件", "精装导视摆件", "台面导视 + 材质样板", 1, "组", [3600, 16000], "帮助销售讲解户型与材质卖点。"],
+    ["氛围灯具", "沙盘辅助氛围灯", "局部 3000K", 1, "组", [6800, 26000], "提升沙盘层次，避免屏幕与模型反光。"],
+  ],
+  VIP室: [
+    ["会客沙发", "VIP会客沙发", "2800 × 950 × 720mm", 1, "套", [36000, 86000], "兼顾私密洽谈与高端接待。"],
+    ["会客茶几", "VIP会客茶几", "1200 × 700 × 380mm", 1, "张", [12000, 36000], "台面耐磨，便于放置资料和饮品。"],
+    ["单椅", "VIP休闲单椅", "780 × 820 × 760mm", 2, "把", [8800, 28000], "形成围合式沟通，坐感优先。"],
+    ["艺术品", "VIP室艺术品", "900 × 1200mm", 1, "幅", [6800, 28000], "突出私享氛围和项目调性。"],
+  ],
+  会所休闲区: [
+    ["休闲沙发", "会所休闲沙发", "组合模块", 1, "组", [42000, 120000], "适合长时间停留，面料需耐磨易清洁。"],
+    ["休闲椅", "会所休闲椅", "780 × 820 × 760mm", 4, "把", [6800, 22000], "便于灵活组合和拍照传播。"],
+    ["茶几边几", "会所茶几边几组合", "多尺寸组合", 1, "组", [16000, 52000], "满足饮品、书籍和陈设摆放。"],
+    ["绿植", "会所大型绿植", "H1500-2200mm", 1, "批", [6800, 28000], "提升松弛感和空间边界。"],
+  ],
+  公区: [
+    ["公区坐凳", "公区耐磨坐凳", "1200 × 450 × 430mm", 4, "张", [4200, 16000], "考虑人流、耐用性和维护成本。"],
+    ["端景装置", "公区端景艺术装置", "按点位定制", 1, "组", [18000, 98000], "形成记忆点并服务导流。"],
+    ["绿植组合", "公区绿植组合", "多点位", 1, "批", [12000, 48000], "耐阴、易维护，交付后可持续养护。"],
+    ["导视陈设", "导视与陈设组合", "导视牌 + 艺术摆件", 1, "组", [6800, 26000], "提升动线体验和项目形象。"],
+  ],
 };
 
 const librarySpaces = Object.keys(spaceTemplates);
@@ -434,6 +499,7 @@ let exportMode = "client";
 let pendingOnly = false;
 let query = "";
 let activeLibraryCard = null;
+let currentGenerationContext = null;
 saveState();
 
 const elements = {
@@ -458,6 +524,23 @@ const elements = {
   searchInput: document.querySelector("#searchInput"),
   templateSpaceInput: document.querySelector("#templateSpaceInput"),
   templateStyleInput: document.querySelector("#templateStyleInput"),
+  projectNameInput: document.querySelector("#projectNameInput"),
+  clientNameInput: document.querySelector("#clientNameInput"),
+  projectAreaInput: document.querySelector("#projectAreaInput"),
+  projectCategoryInput: document.querySelector("#projectCategoryInput"),
+  projectSubtypeInput: document.querySelector("#projectSubtypeInput"),
+  targetBudgetInput: document.querySelector("#targetBudgetInput"),
+  projectRemarkInput: document.querySelector("#projectRemarkInput"),
+  floorPlanInput: document.querySelector("#floorPlanInput"),
+  renderingInput: document.querySelector("#renderingInput"),
+  floorPlanUploadBtn: document.querySelector("#floorPlanUploadBtn"),
+  renderingUploadBtn: document.querySelector("#renderingUploadBtn"),
+  floorPlanUploadStatus: document.querySelector("#floorPlanUploadStatus"),
+  renderingUploadStatus: document.querySelector("#renderingUploadStatus"),
+  floorPlanPreview: document.querySelector("#floorPlanPreview"),
+  renderingPreview: document.querySelector("#renderingPreview"),
+  uploadRequirementText: document.querySelector("#uploadRequirementText"),
+  aiGeneratorHint: document.querySelector("#aiGeneratorHint"),
   generateTemplateBtn: document.querySelector("#generateTemplateBtn"),
   generateAllSpacesBtn: document.querySelector("#generateAllSpacesBtn"),
   templateLibraryCards: document.querySelector("#templateLibraryCards"),
@@ -493,6 +576,8 @@ const elements = {
   statusInput: document.querySelector("#statusInput"),
   supplierInput: document.querySelector("#supplierInput"),
   noteInput: document.querySelector("#noteInput"),
+  clientNoteInput: document.querySelector("#clientNoteInput"),
+  customerVisibleInput: document.querySelector("#customerVisibleInput"),
   formSubtotal: document.querySelector("#formSubtotal"),
   suggestionDialog: document.querySelector("#suggestionDialog"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
@@ -565,14 +650,20 @@ function normalizeProject(project = {}) {
   const fallback = defaultProject();
   const name = project.name || project.projectTitle || fallback.name;
   const items = Array.isArray(project.items) ? project.items.map(normalizeItem) : [];
+  const projectCategory = PROJECT_SUBTYPES[project.projectCategory] ? project.projectCategory : inferProjectCategory(project.projectType);
+  const projectSubtype = normalizeSubtype(project.projectSubtype || project.projectType, projectCategory);
   return {
     id: project.id || createId(),
     name,
     clientName: project.clientName || "",
-    projectType: project.projectType || "私宅软装",
+    projectCategory,
+    projectSubtype,
+    projectType: project.projectType || `${projectSubtype}软装`,
     area: normalizeArea(project.area ?? extractArea(name)),
     style: project.style || inferProjectStyle(name),
     targetBudget: Number(project.targetBudget || 0),
+    remark: project.remark || project.notes || "",
+    attachments: normalizeAttachments(project.attachments),
     items,
   };
 }
@@ -591,7 +682,41 @@ function normalizeItem(item = {}) {
     supplier: item.supplier || "",
     status: item.status || "待确认",
     note: item.note || item.remark || "",
+    clientNote: item.clientNote || item.customerNote || "",
+    customerVisible: item.customerVisible !== false,
   };
+}
+
+function inferProjectCategory(projectType = "") {
+  const text = String(projectType || "");
+  if (PROJECT_SUBTYPES.工装.some((subtype) => text.includes(subtype)) || /售楼处|会所|酒店|办公|商业|公区|样板/.test(text)) return "工装";
+  return "家装";
+}
+
+function normalizeSubtype(value = "", category = "家装") {
+  const subtypes = PROJECT_SUBTYPES[category] || PROJECT_SUBTYPES.家装;
+  const text = String(value || "");
+  return subtypes.find((subtype) => text.includes(subtype)) || subtypes[0];
+}
+
+function normalizeAttachments(attachments = {}) {
+  return {
+    floorPlans: normalizeAttachmentList(attachments.floorPlans),
+    renderings: normalizeAttachmentList(attachments.renderings),
+  };
+}
+
+function normalizeAttachmentList(list = []) {
+  return Array.isArray(list)
+    ? list.filter((file) => file?.dataUrl).map((file) => ({
+      id: file.id || createId(),
+      name: file.name || "未命名图片",
+      type: file.type || "image/*",
+      size: Number(file.size || 0),
+      dataUrl: file.dataUrl,
+      uploadedAt: file.uploadedAt || new Date().toISOString(),
+    }))
+    : [];
 }
 
 function getActiveProject() {
@@ -607,10 +732,14 @@ function createPersistedWorkspace() {
       id: project.id,
       name: project.name,
       clientName: project.clientName || "",
-      projectType: project.projectType || "",
+      projectCategory: project.projectCategory || "家装",
+      projectSubtype: project.projectSubtype || "私宅",
+      projectType: project.projectType || project.projectSubtype || "",
       area: normalizeArea(project.area),
       style: project.style || "待定风格",
       targetBudget: Number(project.targetBudget || 0),
+      remark: project.remark || "",
+      attachments: normalizeAttachments(project.attachments),
       items: project.items.map(normalizeItem),
     })),
   };
@@ -695,32 +824,135 @@ function mapExplicitTemplateItem(space, item) {
   };
 }
 
-function buildTemplateItems(space, style) {
+function buildTemplateItems(space, style, context = getGenerationContext()) {
   const explicitTemplates = BOQ_TEMPLATES[style]?.[space];
-  if (explicitTemplates?.length) {
-    return explicitTemplates.map((item) => mapExplicitTemplateItem(space, item));
-  }
-
+  const sourceItems = explicitTemplates?.length
+    ? explicitTemplates.map((item) => explicitTemplateToTuple(item))
+    : getTemplateRows(space, style);
   const profile = styleProfiles[style] || styleProfiles.奶油风;
-  const templates = getTemplateRows(space, style);
-  return templates.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => ({
-    id: createId(),
-    space,
-    category,
-    name: resolveProductName(style, category, baseName),
-    spec: `常见尺寸：${size}；材质：${profile.material}；颜色：${profile.color}`,
-    quantity,
-    unit,
-    unitPrice: recommendedUnitPrice(priceRange),
-    priceRange: formatPriceRange(priceRange),
-    supplier: profile.supplier,
-    status: "待确认",
-    note: `${style} / ${space}模板生成。${productNote}${profile.note}`,
-  }));
+  const budgetRatio = getBudgetRatio(context);
+
+  return sourceItems.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => {
+    const adjustedRange = adjustPriceRange(priceRange, budgetRatio);
+    const adjustedQuantity = adjustQuantity(quantity, context, space, category);
+    const internalNote = buildInternalNote({ context, style, space, productNote, profile });
+    return {
+      id: createId(),
+      space,
+      category,
+      name: resolveContextualProductName(style, category, baseName, context, space),
+      spec: `常见尺寸：${size}；材质：${profile.material}；颜色：${profile.color}`,
+      quantity: adjustedQuantity,
+      unit,
+      unitPrice: recommendedUnitPrice(adjustedRange),
+      priceRange: formatPriceRange(adjustedRange),
+      supplier: profile.supplier,
+      status: context.projectCategory === "工装" ? "采购询价中" : "待确认",
+      note: internalNote,
+      clientNote: buildClientNote(context, style, space),
+      customerVisible: true,
+    };
+  });
+}
+
+function explicitTemplateToTuple(item) {
+  return [
+    item.category,
+    item.name,
+    item.specs?.replace(/^常见尺寸：/, "") || "按图纸复核",
+    item.quantity,
+    item.unit || "件",
+    parsePriceRange(item.suggestedPrice) || [Number(item.unitPrice || 0), Number(item.unitPrice || 0)],
+    item.internalNote || "结合上传图纸与效果图复核。",
+  ];
+}
+
+function parsePriceRange(value) {
+  const matches = String(value || "").replaceAll(",", "").match(/\d+(?:\.\d+)?/g);
+  return matches?.length >= 2 ? [Number(matches[0]), Number(matches[1])] : null;
+}
+
+function getGenerationContext() {
+  return {
+    projectName: state.name,
+    clientName: state.clientName || "",
+    projectCategory: state.projectCategory || "家装",
+    projectSubtype: state.projectSubtype || normalizeSubtype(state.projectType, state.projectCategory || "家装"),
+    area: getProjectArea(state),
+    targetBudget: Number(state.targetBudget || 0),
+    style: elements.templateStyleInput?.value || getProjectStyle(state),
+    remark: state.remark || "",
+    uploadSummary: getUploadSummary(),
+  };
+}
+
+function getBudgetRatio(context) {
+  if (!context.area || !context.targetBudget) return 1;
+  const budgetPerSqm = context.targetBudget / context.area;
+  if (budgetPerSqm >= 6000) return 1.22;
+  if (budgetPerSqm >= 3500) return 1.08;
+  if (budgetPerSqm <= 1800) return 0.82;
+  return 1;
+}
+
+function adjustPriceRange(range, ratio) {
+  return range.map((value) => Math.max(300, Math.round((Number(value) || 0) * ratio / 100) * 100));
+}
+
+function adjustQuantity(quantity, context, space, category) {
+  const base = Number(quantity || 1);
+  if (context.projectCategory === "工装" && ["洽谈椅", "公区坐凳", "休闲椅"].includes(category)) return Math.max(base, Math.ceil(base * 1.25));
+  if (context.projectCategory === "家装" && ["窗帘", "床品", "地毯"].includes(category) && context.area >= 260) return Math.ceil(base * 1.1);
+  return base;
+}
+
+function resolveContextualProductName(style, category, baseName, context, space) {
+  if (context.projectCategory === "工装" && context.projectSubtype === "样板间" && style === "雅奢" && space === "客厅") {
+    return ({
+      主沙发: "雅奢定制沙发",
+      茶几: "岩板茶几",
+      边几: "金属边几",
+      地毯: "艺术地毯",
+      装饰画: "装饰画",
+      雕塑摆件: "雕塑摆件",
+      花艺: "花艺",
+      氛围灯具: "氛围灯具",
+    })[category] || `雅奢${baseName}`;
+  }
+  if (context.projectCategory === "家装" && context.projectSubtype === "大平层" && style === "中古风" && space === "客厅") {
+    return ({
+      主沙发: "中古胡桃木框架沙发",
+      茶几: "胡桃木茶几",
+      休闲椅: "中古皮革休闲椅",
+      地毯: "羊毛手工地毯",
+      落地灯: "复古落地灯",
+      边几: "边几",
+      装饰画: "装饰画",
+    })[category] || resolveProductName(style, category, baseName);
+  }
+  return resolveProductName(style, category, baseName);
+}
+
+function buildInternalNote({ context, style, space, productNote, profile }) {
+  const typeFocus = context.projectCategory === "工装"
+    ? "工装重点：展示效果、动线体验、拍照传播、批量采购、耐用性与交付周期。"
+    : "家装重点：居住舒适度、家具尺度、收纳需求、窗帘地毯灯具装饰画花艺完整度。";
+  const budgetText = context.targetBudget ? `目标预算 ${money(context.targetBudget)}，按 ${context.area || "待补充"}㎡ 做预算级配。` : "目标预算待补充，先按中高配模板估算。";
+  return `${style} / ${space} / ${context.projectCategory}-${context.projectSubtype}。${typeFocus}${budgetText}${productNote}${profile.note}已结合${context.uploadSummary}生成，后续可接入 AI 图像识别精修。${context.remark ? `备注：${context.remark}` : ""}`;
+}
+
+function buildClientNote(context, style, space) {
+  return `结合${context.uploadSummary}，按${context.projectCategory}${context.projectSubtype}的${style}${space}效果生成，后续以现场复尺和最终选样为准。`;
+}
+
+function getUploadSummary() {
+  const floorCount = state.attachments?.floorPlans?.length || 0;
+  const renderingCount = state.attachments?.renderings?.length || 0;
+  return `${floorCount} 张平面图与 ${renderingCount} 张效果图`;
 }
 
 function generateItemsForSpaceAndStyle(space, style) {
-  return buildTemplateItems(space, style);
+  return buildTemplateItems(space, style, currentGenerationContext || getGenerationContext());
 }
 
 function replaceItemsForSpaces(generatedItems, replaceSpaces) {
@@ -762,24 +994,33 @@ function applyGeneratedItems(generatedItems, message, spacesToReplace = [], styl
 }
 
 function runTemplateGeneration({ spaces, successMessage }) {
+  syncProjectInfoFromForm();
+  if (!hasRequiredUploads()) {
+    showToast(REQUIRED_UPLOAD_MESSAGE);
+    updateGeneratorAvailability();
+    return;
+  }
   const style = elements.templateStyleInput.value;
+  currentGenerationContext = getGenerationContext();
   const generatedItems = spaces.flatMap((space) => generateItemsForSpaceAndStyle(space, style));
   applyGeneratedItems(generatedItems, successMessage(style, generatedItems), spaces, style, spaces);
+  currentGenerationContext = null;
 }
 
 function generateTemplate() {
   const space = elements.templateSpaceInput.value;
   runTemplateGeneration({
     spaces: [space],
-    successMessage: (style, generatedItems) => `已替换 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`,
+    successMessage: (style, generatedItems) => `已根据图纸替换 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`,
   });
 }
 
 function generateAllSpacesTemplate() {
-  const spaces = Object.keys(spaceTemplates);
+  syncProjectInfoFromForm();
+  const spaces = getAllSpacesForCurrentProject();
   runTemplateGeneration({
     spaces,
-    successMessage: (style, generatedItems) => `已替换 ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`,
+    successMessage: (style, generatedItems) => `已根据图纸生成 ${spaces.length} 个空间 · ${style} 全案软装清单，共 ${generatedItems.length} 项产品`,
   });
 }
 
@@ -931,6 +1172,128 @@ function parseInlineAmount(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function hasRequiredUploads() {
+  return Boolean(state.attachments?.floorPlans?.length && state.attachments?.renderings?.length);
+}
+
+function syncProjectInfoToForm() {
+  if (!elements.projectNameInput) return;
+  elements.projectNameInput.value = state.name || "";
+  elements.clientNameInput.value = state.clientName || "";
+  elements.projectAreaInput.value = getProjectArea(state) || "";
+  elements.projectCategoryInput.value = state.projectCategory || "家装";
+  renderSubtypeOptions();
+  elements.projectSubtypeInput.value = state.projectSubtype || PROJECT_SUBTYPES[elements.projectCategoryInput.value][0];
+  elements.targetBudgetInput.value = state.targetBudget || "";
+  elements.templateStyleInput.value = getProjectStyle(state) in styleProfiles ? getProjectStyle(state) : elements.templateStyleInput.value;
+  elements.projectRemarkInput.value = state.remark || "";
+}
+
+function syncProjectInfoFromForm() {
+  if (!elements.projectNameInput) return;
+  state.name = elements.projectNameInput.value.trim() || state.name;
+  state.clientName = elements.clientNameInput.value.trim();
+  state.area = normalizeArea(elements.projectAreaInput.value);
+  state.projectCategory = elements.projectCategoryInput.value;
+  state.projectSubtype = elements.projectSubtypeInput.value || PROJECT_SUBTYPES[state.projectCategory][0];
+  state.projectType = `${state.projectCategory} · ${state.projectSubtype}`;
+  state.targetBudget = Number(elements.targetBudgetInput.value || 0);
+  state.style = elements.templateStyleInput.value;
+  state.remark = elements.projectRemarkInput.value.trim();
+  saveState();
+}
+
+function renderSubtypeOptions() {
+  const category = elements.projectCategoryInput.value || "家装";
+  const current = state.projectSubtype || elements.projectSubtypeInput.value;
+  elements.projectSubtypeInput.innerHTML = PROJECT_SUBTYPES[category].map((subtype) => `<option value="${escapeHtml(subtype)}">${escapeHtml(subtype)}</option>`).join("");
+  elements.projectSubtypeInput.value = PROJECT_SUBTYPES[category].includes(current) ? current : PROJECT_SUBTYPES[category][0];
+}
+
+function updateGeneratorAvailability() {
+  const ready = hasRequiredUploads();
+  [elements.generateTemplateBtn, elements.generateAllSpacesBtn].forEach((button) => {
+    button.disabled = !ready;
+    button.title = ready ? "" : REQUIRED_UPLOAD_MESSAGE;
+  });
+  elements.uploadRequirementText.textContent = ready
+    ? `资料已就绪：${getUploadSummary()}，可根据图纸生成软装清单。`
+    : REQUIRED_UPLOAD_MESSAGE;
+  elements.uploadRequirementText.classList.toggle("is-ready", ready);
+  elements.aiGeneratorHint.textContent = ready
+    ? "系统将结合平面图、效果图、项目类型与风格生成软装 BOQ。"
+    : REQUIRED_UPLOAD_MESSAGE;
+}
+
+function renderUploadPreviews() {
+  renderUploadCollection("floorPlans");
+  renderUploadCollection("renderings");
+}
+
+function renderUploadCollection(collection) {
+  const config = UPLOAD_COLLECTIONS[collection];
+  const files = state.attachments?.[collection] || [];
+  const preview = elements[config.preview];
+  const status = elements[config.status];
+  if (!preview || !status) return;
+  status.textContent = files.length ? `已上传 ${files.length} 张` : "未上传";
+  preview.innerHTML = files.map((file) => `
+    <figure class="upload-thumb">
+      <img src="${escapeHtml(file.dataUrl)}" alt="${escapeHtml(file.name)}" />
+      <figcaption title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</figcaption>
+      <button type="button" class="thumb-remove" data-upload-remove="${collection}" data-upload-id="${escapeHtml(file.id)}" aria-label="删除${escapeHtml(file.name)}">×</button>
+    </figure>
+  `).join("");
+}
+
+function handleUploadFiles(collection, fileList) {
+  const files = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+  if (!files.length) {
+    showToast("请选择图片文件上传");
+    return;
+  }
+  Promise.all(files.map(readImageFile)).then((uploadedFiles) => {
+    state.attachments = normalizeAttachments(state.attachments);
+    state.attachments[collection] = [...state.attachments[collection], ...uploadedFiles];
+    saveState();
+    renderUploadPreviews();
+    updateGeneratorAvailability();
+    showToast(`已上传 ${uploadedFiles.length} 张${UPLOAD_COLLECTIONS[collection].label}`);
+  }).catch((error) => {
+    console.warn("图片上传失败", error);
+    showToast("图片读取失败，请重新上传");
+  });
+}
+
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve({
+      id: createId(),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      dataUrl: String(reader.result || ""),
+      uploadedAt: new Date().toISOString(),
+    }));
+    reader.addEventListener("error", reject);
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeUploadedImage(collection, id) {
+  state.attachments = normalizeAttachments(state.attachments);
+  state.attachments[collection] = state.attachments[collection].filter((file) => file.id !== id);
+  saveState();
+  renderUploadPreviews();
+  updateGeneratorAvailability();
+  showToast("已删除上传图片");
+}
+
+function getAllSpacesForCurrentProject() {
+  return state.projectCategory === "工装" ? COMMERCIAL_SPACES : RESIDENTIAL_SPACES;
+}
+
 function updateBudgetSummary() {
   const total = getProjectTotal(state);
   const pendingTotal = state.items.filter((item) => PENDING_STATUSES.includes(item.status)).reduce((sum, item) => sum + subtotal(item), 0);
@@ -977,6 +1340,9 @@ function render() {
   elements.projectMenuCurrent.textContent = state.name;
   elements.reportModeLabel.textContent = exportMode === "internal" ? "软装全案 · 内部采购版" : "软装全案 · 客户汇报版";
   elements.projectMeta.textContent = `${workspace.projects.length} 个项目 · 当前 ${state.items.length} 项清单 · ${area ? `${area}㎡` : "面积待补充"} · ${style}`;
+  syncProjectInfoToForm();
+  renderUploadPreviews();
+  updateGeneratorAvailability();
   elements.searchInput.value = query;
   elements.exportModeInput.value = exportMode || "client";
   elements.clearFilterBtn.hidden = !pendingOnly;
@@ -987,7 +1353,7 @@ function render() {
 
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
-    : '<tr><td colspan="12" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
+    : '<tr><td colspan="14" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
   updateBudgetSummary();
   renderTemplateLibrary();
@@ -1042,6 +1408,8 @@ function renderRow(item) {
       <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
       <td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
       <td class="customer-hidden note-cell">${escapeHtml(item.note || "-")}</td>
+      <td class="note-cell">${escapeHtml(item.clientNote || customerNote(item))}</td>
+      <td>${item.customerVisible === false ? "否" : "是"}</td>
       <td class="actions-col row-actions">
         <button type="button" class="mini-button" data-action="edit" data-id="${safeId}">编辑</button>
         <button type="button" class="mini-button danger" data-action="delete" data-id="${safeId}">删除</button>
@@ -1083,6 +1451,8 @@ function openProductDialog(item = null) {
   elements.statusInput.value = item?.status || "待确认";
   elements.supplierInput.value = item?.supplier || "";
   elements.noteInput.value = item?.note || "";
+  elements.clientNoteInput.value = item?.clientNote || "";
+  elements.customerVisibleInput.checked = item?.customerVisible !== false;
   updateFormSubtotal();
   elements.productDialog.showModal();
 }
@@ -1101,6 +1471,8 @@ function collectFormItem() {
     supplier: elements.supplierInput.value.trim(),
     status: elements.statusInput.value,
     note: elements.noteInput.value.trim(),
+    clientNote: elements.clientNoteInput.value.trim(),
+    customerVisible: elements.customerVisibleInput.checked,
   };
 }
 
@@ -1184,11 +1556,11 @@ function restoreSampleData() {
 function exportCsv() {
   const isClientReport = exportMode !== "internal";
   const headers = isClientReport
-    ? ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "预算小计", "状态", "客户备注"]
-    : ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注"];
+    ? ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "预算小计", "状态", "客户备注", "是否客户可见"]
+    : ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注", "客户版备注", "是否客户可见"];
   const rows = state.items.map((item) => isClientReport
-    ? [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", subtotal(item), item.status, customerNote(item)]
-    : [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note]);
+    ? [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", subtotal(item), item.status, item.clientNote || customerNote(item), item.customerVisible === false ? "否" : "是"]
+    : [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note, item.clientNote || customerNote(item), item.customerVisible === false ? "否" : "是"]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
@@ -1393,6 +1765,42 @@ elements.productForm.addEventListener("submit", (event) => {
 elements.closeDialogBtn.addEventListener("click", () => elements.productDialog.close());
 elements.cancelDialogBtn.addEventListener("click", () => elements.productDialog.close());
 elements.addProductBtn.addEventListener("click", () => openProductDialog());
+
+elements.floorPlanUploadBtn.addEventListener("click", () => elements.floorPlanInput.click());
+elements.renderingUploadBtn.addEventListener("click", () => elements.renderingInput.click());
+document.querySelectorAll("[data-upload-trigger]").forEach((trigger) => {
+  trigger.addEventListener("click", () => {
+    const collection = trigger.dataset.uploadTrigger;
+    (collection === "floorPlans" ? elements.floorPlanInput : elements.renderingInput).click();
+  });
+});
+elements.floorPlanInput.addEventListener("change", (event) => {
+  handleUploadFiles("floorPlans", event.target.files);
+  event.target.value = "";
+});
+elements.renderingInput.addEventListener("change", (event) => {
+  handleUploadFiles("renderings", event.target.files);
+  event.target.value = "";
+});
+document.querySelector("#templateBuilder").addEventListener("click", (event) => {
+  const removeButton = event.target.closest("[data-upload-remove]");
+  if (removeButton) removeUploadedImage(removeButton.dataset.uploadRemove, removeButton.dataset.uploadId);
+});
+[elements.projectNameInput, elements.clientNameInput, elements.projectAreaInput, elements.targetBudgetInput, elements.projectRemarkInput].forEach((input) => {
+  input.addEventListener("change", () => {
+    syncProjectInfoFromForm();
+    render();
+  });
+});
+elements.projectCategoryInput.addEventListener("change", () => {
+  renderSubtypeOptions();
+  syncProjectInfoFromForm();
+  render();
+});
+elements.projectSubtypeInput.addEventListener("change", () => {
+  syncProjectInfoFromForm();
+  render();
+});
 elements.generateTemplateBtn.addEventListener("click", generateTemplate);
 elements.generateAllSpacesBtn.addEventListener("click", generateAllSpacesTemplate);
 elements.templateSpaceInput.addEventListener("change", () => {
@@ -1401,6 +1809,8 @@ elements.templateSpaceInput.addEventListener("change", () => {
 });
 elements.templateStyleInput.addEventListener("change", () => {
   activeLibraryCard = "style";
+  state.style = elements.templateStyleInput.value;
+  saveState();
   renderTemplateLibrary();
 });
 elements.templateLibraryCards.addEventListener("click", (event) => {

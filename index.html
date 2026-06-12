@@ -123,37 +123,142 @@
           </article>
         </section>
 
-        <section class="template-builder panel" id="templateBuilder" aria-labelledby="templateBuilderTitle">
-          <div>
-            <p class="eyebrow">Template Generator</p>
-            <h3 id="templateBuilderTitle">按空间和风格自动生成清单模板</h3>
-            <p>选择空间与软装风格，一键生成带品类、名称、尺寸、材质、颜色、数量、建议单价区间和备注的专业 BOQ 模板。</p>
+        <section class="template-builder panel ai-generator" id="templateBuilder" aria-labelledby="templateBuilderTitle">
+          <div class="template-builder-intro">
+            <p class="eyebrow">AI BOQ Generator</p>
+            <h3 id="templateBuilderTitle">根据平面图与效果图生成软装清单</h3>
+            <p>系统将结合平面图、效果图、项目类型与风格生成软装 BOQ。当前静态版本先基于项目类型、空间、风格、面积与预算生成专业清单模板，并预留后续 AI 图像识别接口。</p>
           </div>
-          <div class="template-controls">
-            <label>空间
-              <select id="templateSpaceInput">
-                <option>客厅</option>
-                <option>餐厅</option>
-                <option>主卧</option>
-                <option>次卧</option>
-                <option>玄关</option>
-                <option>洽谈区</option>
-                <option>书房</option>
-              </select>
-            </label>
-            <label>风格
-              <select id="templateStyleInput">
-                <option>奶油风</option>
-                <option>中古风</option>
-                <option>轻奢风</option>
-                <option>法式</option>
-                <option>雅奢</option>
-                <option>度假风</option>
-                <option>黑金风</option>
-              </select>
-            </label>
-            <button class="primary-button" type="button" id="generateTemplateBtn">✦ 生成当前空间</button>
-            <button class="secondary-button" type="button" id="generateAllSpacesBtn">✦ 一键生成空间清单</button>
+
+          <div class="generator-steps" aria-label="AI 软装清单生成流程">
+            <section class="generator-step upload-step" aria-labelledby="uploadStepTitle">
+              <div class="step-heading">
+                <span>01</span>
+                <div>
+                  <h4 id="uploadStepTitle">上传资料</h4>
+                  <p>平面图与效果图为必填资料，刷新页面后预览会保存在本地浏览器。</p>
+                </div>
+              </div>
+              <div class="upload-grid">
+                <article class="upload-card" data-upload-card="floorPlans">
+                  <div class="upload-card-head">
+                    <div>
+                      <strong>上传平面图 <em>*</em></strong>
+                      <span id="floorPlanUploadStatus">未上传</span>
+                    </div>
+                    <button class="mini-button" type="button" id="floorPlanUploadBtn">选择图片</button>
+                  </div>
+                  <input id="floorPlanInput" type="file" accept="image/*" multiple hidden />
+                  <div class="upload-dropzone" data-upload-trigger="floorPlans">
+                    <span class="upload-icon">⌁</span>
+                    <p>上传平面布置图 / 尺寸图</p>
+                    <small>支持 JPG、PNG、WebP，可上传多张</small>
+                  </div>
+                  <div class="upload-preview-grid" id="floorPlanPreview" aria-label="平面图预览"></div>
+                </article>
+
+                <article class="upload-card" data-upload-card="renderings">
+                  <div class="upload-card-head">
+                    <div>
+                      <strong>上传效果图 <em>*</em></strong>
+                      <span id="renderingUploadStatus">未上传</span>
+                    </div>
+                    <button class="mini-button" type="button" id="renderingUploadBtn">选择图片</button>
+                  </div>
+                  <input id="renderingInput" type="file" accept="image/*" multiple hidden />
+                  <div class="upload-dropzone" data-upload-trigger="renderings">
+                    <span class="upload-icon">✦</span>
+                    <p>上传客餐厅、卧室、公区等效果图</p>
+                    <small>支持多张效果图，生成时用于风格与陈设判断</small>
+                  </div>
+                  <div class="upload-preview-grid" id="renderingPreview" aria-label="效果图预览"></div>
+                </article>
+              </div>
+              <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图，系统需要根据图纸与空间效果生成清单。</p>
+            </section>
+
+            <section class="generator-step project-info-step" aria-labelledby="projectInfoStepTitle">
+              <div class="step-heading">
+                <span>02</span>
+                <div>
+                  <h4 id="projectInfoStepTitle">选择项目类型</h4>
+                  <p>区分家装与工装的生成重点，匹配真实设计公司工作流。</p>
+                </div>
+              </div>
+              <div class="project-info-grid">
+                <label>项目名称<input id="projectNameInput" type="text" placeholder="例如：滨江大平层软装全案" /></label>
+                <label>客户名称<input id="clientNameInput" type="text" placeholder="客户 / 开发商名称" /></label>
+                <label>项目面积（㎡）<input id="projectAreaInput" type="number" min="0" step="1" placeholder="240" /></label>
+                <label>项目类型
+                  <select id="projectCategoryInput">
+                    <option value="家装">家装</option>
+                    <option value="工装">工装</option>
+                  </select>
+                </label>
+                <label>项目细分类型
+                  <select id="projectSubtypeInput"></select>
+                </label>
+                <label>目标预算（元）<input id="targetBudgetInput" type="number" min="0" step="1000" placeholder="800000" /></label>
+              </div>
+            </section>
+
+            <section class="generator-step template-controls" aria-labelledby="styleStepTitle">
+              <div class="step-heading">
+                <span>03</span>
+                <div>
+                  <h4 id="styleStepTitle">选择空间与风格</h4>
+                  <p>生成逻辑会同时参考项目面积、目标预算、空间属性与风格调性。</p>
+                </div>
+              </div>
+              <div class="control-grid">
+                <label>空间
+                  <select id="templateSpaceInput">
+                    <option>客厅</option>
+                    <option>餐厅</option>
+                    <option>主卧</option>
+                    <option>次卧</option>
+                    <option>玄关</option>
+                    <option>书房</option>
+                    <option>样板间</option>
+                    <option>售楼处</option>
+                    <option>洽谈区</option>
+                    <option>沙盘区</option>
+                    <option>VIP室</option>
+                    <option>会所休闲区</option>
+                    <option>公区</option>
+                  </select>
+                </label>
+                <label>设计风格
+                  <select id="templateStyleInput">
+                    <option>奶油风</option>
+                    <option>中古风</option>
+                    <option>轻奢风</option>
+                    <option>法式</option>
+                    <option>雅奢</option>
+                    <option>度假风</option>
+                    <option>黑金风</option>
+                    <option>现代东方</option>
+                    <option>香奈儿风</option>
+                    <option>艺术馆风</option>
+                  </select>
+                </label>
+                <label class="span-2">备注说明<textarea id="projectRemarkInput" rows="3" placeholder="例如：重点控制客厅拍照传播效果；窗帘需考虑全屋电动轨道；客户偏好低饱和暖色。"></textarea></label>
+              </div>
+            </section>
+
+            <section class="generator-step generation-actions" aria-labelledby="generateStepTitle">
+              <div class="step-heading">
+                <span>04</span>
+                <div>
+                  <h4 id="generateStepTitle">生成清单</h4>
+                  <p id="aiGeneratorHint">资料完整后，可根据当前空间或一键生成全案软装清单。</p>
+                </div>
+              </div>
+              <div class="generator-buttons">
+                <button class="primary-button" type="button" id="generateTemplateBtn">✦ 根据图纸生成当前空间清单</button>
+                <button class="secondary-button" type="button" id="generateAllSpacesBtn">✦ 一键生成全案软装清单</button>
+              </div>
+            </section>
           </div>
         </section>
 
@@ -163,7 +268,7 @@
               <p class="eyebrow">Template Library</p>
               <h3>软装清单模板库</h3>
             </div>
-            <span>7 空间 × 7 风格</span>
+            <span>家装/工装空间 × 10 风格</span>
           </div>
           <div class="library-grid" id="templateLibraryCards">
             <button class="library-card" type="button" data-library-card="space" aria-expanded="false" aria-controls="templateLibraryPanel">
@@ -173,7 +278,7 @@
             </button>
             <button class="library-card" type="button" data-library-card="style" aria-expanded="false" aria-controls="templateLibraryPanel">
               <strong>风格推荐</strong>
-              <p>奶油风、中古风、轻奢风、法式、雅奢、度假风、黑金风，自动匹配材质、颜色与供应商备注。</p>
+              <p>奶油风、中古风、轻奢风、法式、雅奢、度假风、黑金风、现代东方、香奈儿风、艺术馆风，自动匹配材质、颜色与供应商备注。</p>
               <span>展开选择风格 →</span>
             </button>
             <button class="library-card" type="button" data-library-card="mode" aria-expanded="false" aria-controls="templateLibraryPanel">
@@ -212,6 +317,8 @@
                     <th>预算小计</th>
                     <th>状态</th>
                     <th class="customer-hidden">内部备注</th>
+                    <th>客户版备注</th>
+                    <th>是否客户可见</th>
                     <th class="actions-col">操作</th>
                   </tr>
                 </thead>
@@ -290,6 +397,8 @@
           </label>
           <label class="span-2">供应商<input id="supplierInput" /></label>
           <label class="span-2">内部备注<textarea id="noteInput" rows="3"></textarea></label>
+          <label class="span-2">客户版备注<textarea id="clientNoteInput" rows="2"></textarea></label>
+          <label class="checkbox-field"><input id="customerVisibleInput" type="checkbox" checked /> 是否客户可见</label>
         </div>
         <div class="dialog-total">小计：<strong id="formSubtotal">¥ 0</strong></div>
         <div class="dialog-actions">
