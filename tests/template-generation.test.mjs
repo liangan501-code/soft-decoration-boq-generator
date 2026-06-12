@@ -64,3 +64,38 @@ test("mid-century living room template cannot fall back to cream sofa", () => {
   assert.match(midCenturyLivingRoom, /name: "中古感羊毛手工地毯"/);
   assert.doesNotMatch(midCenturyLivingRoom, /name: "奶油柔模块沙发"/);
 });
+
+test("selected dining style templates use independent product names", () => {
+  const templateStart = source.indexOf("const styleSpaceTemplateOverrides");
+  const templateEnd = source.indexOf("const spaceTemplates", templateStart);
+  const overrides = source.slice(templateStart, templateEnd);
+
+  for (const name of [
+    "奶油系餐厅主餐桌",
+    "奶油布艺餐椅",
+    "奶油风弧形吊灯",
+    "胡桃木中古餐桌",
+    "中古皮革餐椅",
+    "复古金属吊灯",
+    "法式雕花圆餐桌",
+    "法式藤编餐椅",
+    "黄铜玻璃吊灯",
+    "法式复古餐边柜",
+    "亚麻餐桌布",
+    "法式花艺中心摆件",
+    "黑色岩板餐桌",
+    "黑金皮革餐椅",
+    "金属线性吊灯",
+  ]) {
+    assert.match(overrides, new RegExp(name), `${name} should be in style-space template overrides`);
+  }
+
+  const frenchDiningStart = overrides.indexOf("法式: {");
+  const frenchDiningBlock = overrides.slice(frenchDiningStart, overrides.indexOf("黑金风: {", frenchDiningStart));
+  assert.doesNotMatch(frenchDiningBlock, /奶油系餐厅主餐桌|奶油布艺餐椅|奶油风弧形吊灯/);
+});
+
+test("template generation saves generated items before rerendering the BOQ table", () => {
+  assert.match(source, /state\.items = replaceSpaces\.size \? replaceItemsForSpaces\(generatedItems, replaceSpaces\) : \[\.\.\.state\.items, \.\.\.generatedItems\];/);
+  assert.match(source, /saveState\(\);\n  render\(\);/);
+});
