@@ -19,6 +19,7 @@
         <nav class="nav-list">
           <a class="active" href="#overview">⌘ 项目总览</a>
           <a href="#scheme">✦ 方案与色板</a>
+          <a href="#templateBuilder">✦ 模板生成</a>
           <a href="#boq">▦ 清单与预算</a>
           <a href="#purchase">◈ 采购进度</a>
           <a href="#report">☷ 客户汇报</a>
@@ -86,6 +87,39 @@
           </article>
         </section>
 
+        <section class="template-builder panel" id="templateBuilder" aria-labelledby="templateBuilderTitle">
+          <div>
+            <p class="eyebrow">Template Generator</p>
+            <h3 id="templateBuilderTitle">按空间和风格自动生成清单模板</h3>
+            <p>选择空间与软装风格，一键生成带品类、名称、尺寸、材质、颜色、数量、建议单价区间和备注的专业 BOQ 模板。</p>
+          </div>
+          <div class="template-controls">
+            <label>空间
+              <select id="templateSpaceInput">
+                <option>客厅</option>
+                <option>餐厅</option>
+                <option>主卧</option>
+                <option>次卧</option>
+                <option>玄关</option>
+                <option>洽谈区</option>
+                <option>样板间公区</option>
+              </select>
+            </label>
+            <label>风格
+              <select id="templateStyleInput">
+                <option>奶油风</option>
+                <option>中古风</option>
+                <option>轻奢风</option>
+                <option>法式</option>
+                <option>雅奢</option>
+                <option>度假风</option>
+                <option>黑金风</option>
+              </select>
+            </label>
+            <button class="primary-button" type="button" id="generateTemplateBtn">✦ 一键生成清单</button>
+          </div>
+        </section>
+
         <section class="content-grid">
           <article class="panel boq-panel" id="boq">
             <div class="panel-header">
@@ -105,9 +139,10 @@
                     <th>空间</th>
                     <th>品类</th>
                     <th>产品名称 / 材质说明</th>
-                    <th>规格与配置</th>
+                    <th>常见尺寸 / 材质 / 颜色</th>
                     <th>数量</th>
-                    <th class="customer-hidden">单价</th>
+                    <th class="customer-hidden">建议单价区间</th>
+                    <th class="customer-hidden">执行单价</th>
                     <th class="customer-hidden">供应商</th>
                     <th>预算小计</th>
                     <th>状态</th>
@@ -174,10 +209,11 @@
           <label>空间<input id="spaceInput" required /></label>
           <label>品类<input id="categoryInput" required /></label>
           <label class="span-2">产品名称 / 材质说明<input id="nameInput" required /></label>
-          <label class="span-2">规格与配置<input id="specInput" required /></label>
+          <label class="span-2">常见尺寸 / 材质 / 颜色<input id="specInput" required /></label>
           <label>数量<input id="quantityInput" type="number" min="0" step="0.01" required /></label>
           <label>单位<input id="unitInput" required placeholder="套 / 组 / 米" /></label>
-          <label>单价<input id="unitPriceInput" type="number" min="0" step="0.01" required /></label>
+          <label>建议单价区间<input id="priceRangeInput" placeholder="¥ 3,000 - 5,000" /></label>
+          <label>执行单价<input id="unitPriceInput" type="number" min="0" step="0.01" required /></label>
           <label>状态
             <select id="statusInput">
               <option>客户已确认</option>

@@ -121,6 +121,71 @@ const sampleImportItems = [
   },
 ];
 
+const styleProfiles = {
+  奶油风: { adjective: "奶油系", material: "羊羔绒、微水泥、浅橡木", color: "奶油白 / 杏仁米 / 暖咖", supplier: "Cream Atelier", note: "控制同色系层次，优先选择柔和圆角与哑光质感。" },
+  中古风: { adjective: "中古感", material: "胡桃木、藤编、复古皮革", color: "胡桃木色 / 焦糖棕 / 橄榄绿", supplier: "Mid-Century Gallery", note: "注意木色统一，金属件建议做旧铜或黑钛处理。" },
+  轻奢风: { adjective: "轻奢", material: "岩板、香槟金不锈钢、丝绒", color: "象牙白 / 香槟金 / 雾灰", supplier: "Luxe Living Select", note: "金属线条不宜过多，保持克制的高级感。" },
+  法式: { adjective: "法式", material: "雕花木、棉麻、黄铜、石膏肌理", color: "珍珠白 / 复古米 / 浅金", supplier: "Maison Française", note: "搭配弧线、花线和柔雾面料，避免过度繁复。" },
+  雅奢: { adjective: "雅奢", material: "大理石、真皮、拉丝金属、混纺面料", color: "暖灰 / 深咖 / 古铜金", supplier: "Elegant Bespoke", note: "以低饱和色和精细收口体现品质，预留定制打样周期。" },
+  度假风: { adjective: "度假感", material: "藤编、柚木、亚麻、手工陶", color: "沙色 / 海盐白 / 棕榈绿", supplier: "Resort Home Studio", note: "强调自然肌理和松弛感，软包建议选择耐污易打理面料。" },
+  黑金风: { adjective: "黑金", material: "黑色烤漆、黑钛金属、深色岩板、皮革", color: "曜石黑 / 古铜金 / 深灰", supplier: "Noir Gold Works", note: "控制反光材质比例，灯光色温建议 2700K-3000K。" },
+};
+
+const spaceTemplates = {
+  客厅: [
+    ["主沙发", "模块沙发", "3200 × 980 × 720mm", 1, "套", [32000, 68000], "建议按电视墙与茶几轴线复核坐深。"],
+    ["茶几", "组合茶几", "Φ900 × 360mm + Φ600 × 420mm", 1, "组", [6800, 18000], "预留沙发前 350-450mm 通行距离。"],
+    ["边几", "造型边几", "Φ450 × 520mm", 2, "只", [2200, 6800], "可兼顾落地灯、香氛与小型摆件。"],
+    ["地毯", "客厅主地毯", "2400 × 3400mm", 1, "张", [7500, 22000], "建议覆盖沙发前脚，强化围合感。"],
+    ["装饰画", "沙发背景艺术画", "1200 × 1600mm", 1, "幅", [4800, 18000], "画面色彩需呼应抱枕和单椅。"],
+    ["落地灯", "氛围落地灯", "H1550-1700mm", 1, "盏", [2800, 9500], "作为夜间辅助照明，建议暖光源。"],
+  ],
+  餐厅: [
+    ["餐桌", "餐厅主餐桌", "2200 × 1000 × 750mm", 1, "张", [18000, 52000], "按用餐人数与餐边柜距离确认长度。"],
+    ["餐椅", "软包餐椅", "520 × 560 × 780mm", 6, "把", [1800, 6800], "建议预留 1-2 把备选椅供客户试坐。"],
+    ["吊灯", "线性餐厅吊灯", "L1400-1800mm，3000K", 1, "组", [6800, 24000], "安装高度以桌面上方 700-800mm 为宜。"],
+    ["餐边柜摆件", "餐边柜陈设组合", "托盘 + 花器 + 艺术书", 1, "组", [2200, 8800], "避免遮挡插座和咖啡机操作区。"],
+    ["桌旗", "餐桌布艺桌旗", "350 × 2200mm", 1, "条", [600, 2600], "颜色需与餐椅面料形成细节呼应。"],
+  ],
+  主卧: [
+    ["床", "主卧软包床", "1800 × 2000mm", 1, "张", [18000, 52000], "床头高度需结合背景墙比例确认。"],
+    ["床头柜", "床头柜组合", "520 × 420 × 500mm", 2, "只", [2800, 9800], "左右可做同系列不同形态增强层次。"],
+    ["床品", "四件套与盖毯", "1.8m 床适配", 1, "套", [3200, 12000], "亲肤面料优先，拍摄前需熨烫整理。"],
+    ["窗帘", "双层窗帘", "墙到墙定制，遮光率 ≥ 90%", 24, "米", [650, 1600], "下单前必须现场复尺并确认轨道方式。"],
+    ["床尾凳", "床尾长凳", "1400 × 450 × 430mm", 1, "张", [4200, 16000], "适合增强酒店式完整度。"],
+    ["装饰画", "床头背景画", "900 × 1200mm", 1, "幅", [3600, 15000], "画芯避免强对比，保持睡眠氛围。"],
+  ],
+  次卧: [
+    ["床", "次卧成品床", "1500 × 2000mm", 1, "张", [9800, 32000], "尺寸可按客房或长辈房需求调整。"],
+    ["床头柜", "轻量床头柜", "450 × 400 × 500mm", 2, "只", [1600, 6800], "如空间紧凑可改为壁挂层板。"],
+    ["床品", "次卧床品套装", "1.5m 床适配", 1, "套", [2200, 8800], "建议准备一组中性色备用方案。"],
+    ["窗帘", "遮光帘 + 纱帘", "墙到墙定制", 18, "米", [560, 1380], "注意空调出风口与窗帘盒位置。"],
+    ["地毯", "床侧地毯", "1600 × 2300mm", 1, "张", [2800, 9800], "增强落脚舒适度，可选择短绒易清洁材质。"],
+  ],
+  玄关: [
+    ["玄关凳", "换鞋凳", "900 × 380 × 430mm", 1, "张", [2800, 12000], "需避开门扇开启半径。"],
+    ["装饰画", "玄关端景画", "800 × 1200mm", 1, "幅", [3600, 18000], "作为入户第一视觉，建议保留重点预算。"],
+    ["花器", "端景花器", "H450-650mm", 1, "件", [1200, 6500], "可搭配季节性仿真花材或干枝。"],
+    ["托盘", "钥匙托盘", "300 × 180mm", 1, "只", [600, 2800], "兼顾实用收纳与精致陈列。"],
+    ["地垫", "入户地垫", "900 × 1400mm", 1, "张", [900, 3800], "需选择耐磨防滑底背。"],
+  ],
+  洽谈区: [
+    ["洽谈桌", "圆形洽谈桌", "Φ900 × 750mm", 1, "张", [6800, 26000], "满足 3-4 人沟通和方案摊开展示。"],
+    ["洽谈椅", "舒适洽谈椅", "560 × 580 × 780mm", 4, "把", [1800, 7800], "坐感优先，面料需耐磨。"],
+    ["地毯", "洽谈区地毯", "2000 × 2000mm", 1, "张", [4200, 16000], "用于界定洽谈区边界。"],
+    ["吊灯", "洽谈区装饰灯", "Φ600-800mm，3000K", 1, "盏", [3800, 16000], "避免眩光直射客户视线。"],
+    ["绿植", "大型造景绿植", "H1200-1600mm", 1, "组", [1800, 8600], "可提升空间停留感和亲和度。"],
+  ],
+  样板间公区: [
+    ["接待沙发", "公区接待沙发", "2600 × 900 × 720mm", 1, "套", [28000, 88000], "需兼顾高频接待耐用度。"],
+    ["艺术装置", "公共区艺术装置", "定制 1200-1800mm", 1, "组", [18000, 98000], "建议提前确认安装结构和消防通道。"],
+    ["休闲椅", "公区休闲椅", "760 × 780 × 760mm", 2, "把", [6800, 26000], "造型需具备记忆点，适合拍照传播。"],
+    ["边几", "公区边几", "Φ500 × 520mm", 2, "只", [2600, 9800], "材质需耐刮擦，便于维护。"],
+    ["地毯", "公区大地毯", "3000 × 4000mm", 1, "张", [12000, 42000], "建议选择商用级耐磨材质。"],
+    ["香氛", "空间香氛系统", "覆盖 80-120㎡", 1, "套", [3800, 16000], "与项目调性匹配，避免香味过浓。"],
+  ],
+};
+
 let state = loadState();
 
 const elements = {
@@ -132,6 +197,9 @@ const elements = {
   pendingAmount: document.querySelector("#pendingAmount"),
   purchaseScore: document.querySelector("#purchaseScore"),
   searchInput: document.querySelector("#searchInput"),
+  templateSpaceInput: document.querySelector("#templateSpaceInput"),
+  templateStyleInput: document.querySelector("#templateStyleInput"),
+  generateTemplateBtn: document.querySelector("#generateTemplateBtn"),
   newProjectBtn: document.querySelector("#newProjectBtn"),
   importBtn: document.querySelector("#importBtn"),
   exportBtn: document.querySelector("#exportBtn"),
@@ -154,6 +222,7 @@ const elements = {
   quantityInput: document.querySelector("#quantityInput"),
   unitInput: document.querySelector("#unitInput"),
   unitPriceInput: document.querySelector("#unitPriceInput"),
+  priceRangeInput: document.querySelector("#priceRangeInput"),
   statusInput: document.querySelector("#statusInput"),
   supplierInput: document.querySelector("#supplierInput"),
   noteInput: document.querySelector("#noteInput"),
@@ -181,6 +250,49 @@ function money(value) {
   return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", maximumFractionDigits: 0 }).format(value || 0);
 }
 
+
+function formatPriceRange(range) {
+  const [min, max] = range;
+  return `${money(min)} - ${money(max)}`;
+}
+
+function recommendedUnitPrice(range) {
+  const [min, max] = range;
+  return Math.round((Number(min) + Number(max)) / 2);
+}
+
+function buildTemplateItems(space, style) {
+  const profile = styleProfiles[style] || styleProfiles.奶油风;
+  const templates = spaceTemplates[space] || spaceTemplates.客厅;
+  return templates.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => ({
+    id: createId(),
+    space,
+    category,
+    name: `${profile.adjective}${baseName}`,
+    spec: `常见尺寸：${size}；材质：${profile.material}；颜色：${profile.color}`,
+    quantity,
+    unit,
+    unitPrice: recommendedUnitPrice(priceRange),
+    priceRange: formatPriceRange(priceRange),
+    supplier: profile.supplier,
+    status: "待确认",
+    note: `${style} / ${space}模板生成。${productNote}${profile.note}`,
+  }));
+}
+
+function generateTemplate() {
+  const space = elements.templateSpaceInput.value;
+  const style = elements.templateStyleInput.value;
+  const generatedItems = buildTemplateItems(space, style);
+  state.items = [...state.items, ...generatedItems];
+  state.pendingOnly = false;
+  state.query = "";
+  saveState();
+  render();
+  document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
+  showToast(`已生成 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`);
+}
+
 function subtotal(item) {
   return Number(item.quantity || 0) * Number(item.unitPrice || 0);
 }
@@ -204,7 +316,7 @@ function render() {
 
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
-    : '<tr><td colspan="11" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
+    : '<tr><td colspan="12" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
   const total = state.items.reduce((sum, item) => sum + subtotal(item), 0);
   const pendingTotal = state.items.filter((item) => PENDING_STATUSES.includes(item.status)).reduce((sum, item) => sum + subtotal(item), 0);
@@ -227,6 +339,7 @@ function renderRow(item) {
       <td class="item-cell">${escapeHtml(item.name)}</td>
       <td>${escapeHtml(item.spec)}</td>
       <td><input class="inline-number" type="number" min="0" step="0.01" value="${Number(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /> ${escapeHtml(item.unit)}</td>
+      <td class="price-range customer-hidden">${escapeHtml(item.priceRange || formatPriceRange([Number(item.unitPrice || 0), Number(item.unitPrice || 0)]))}</td>
       <td class="money customer-hidden"><input class="inline-price" type="number" min="0" step="0.01" value="${Number(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
       <td class="money">${money(subtotal(item))}</td>
@@ -269,6 +382,7 @@ function openProductDialog(item = null) {
   elements.quantityInput.value = item?.quantity ?? 1;
   elements.unitInput.value = item?.unit || "件";
   elements.unitPriceInput.value = item?.unitPrice ?? 0;
+  elements.priceRangeInput.value = item?.priceRange || "";
   elements.statusInput.value = item?.status || "待确认";
   elements.supplierInput.value = item?.supplier || "";
   elements.noteInput.value = item?.note || "";
@@ -286,6 +400,7 @@ function collectFormItem() {
     quantity: Number(elements.quantityInput.value || 0),
     unit: elements.unitInput.value.trim(),
     unitPrice: Number(elements.unitPriceInput.value || 0),
+    priceRange: elements.priceRangeInput.value.trim(),
     supplier: elements.supplierInput.value.trim(),
     status: elements.statusInput.value,
     note: elements.noteInput.value.trim(),
@@ -308,8 +423,8 @@ function importSamples() {
 }
 
 function exportCsv() {
-  const headers = ["空间", "品类", "产品名称", "规格", "数量", "单位", "单价", "预算小计", "供应商", "状态", "内部备注"];
-  const rows = state.items.map((item) => [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.unitPrice, subtotal(item), item.supplier, item.status, item.note]);
+  const headers = ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注"];
+  const rows = state.items.map((item) => [item.space, item.category, item.name, item.spec, item.quantity, item.unit, item.priceRange || "", item.unitPrice, subtotal(item), item.supplier, item.status, item.note]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
@@ -392,6 +507,7 @@ elements.productForm.addEventListener("submit", (event) => {
 elements.closeDialogBtn.addEventListener("click", () => elements.productDialog.close());
 elements.cancelDialogBtn.addEventListener("click", () => elements.productDialog.close());
 elements.addProductBtn.addEventListener("click", () => openProductDialog());
+elements.generateTemplateBtn.addEventListener("click", generateTemplate);
 elements.newProjectBtn.addEventListener("click", addProject);
 elements.importBtn.addEventListener("click", importSamples);
 elements.exportBtn.addEventListener("click", exportCsv);
