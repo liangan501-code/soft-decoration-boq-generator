@@ -212,7 +212,6 @@ let exportMode = "client";
 let pendingOnly = false;
 let query = "";
 let activeLibraryCard = null;
-let inlineEditSaveTimer = null;
 saveState();
 
 const elements = {
@@ -399,19 +398,7 @@ function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedWorkspace()));
 }
 
-function scheduleInlineEditSave() {
-  window.clearTimeout(inlineEditSaveTimer);
-  inlineEditSaveTimer = window.setTimeout(() => {
-    saveState();
-    inlineEditSaveTimer = null;
-  }, 350);
-}
-
 function flushInlineEditSave() {
-  if (inlineEditSaveTimer) {
-    window.clearTimeout(inlineEditSaveTimer);
-    inlineEditSaveTimer = null;
-  }
   saveState();
 }
 
@@ -664,11 +651,18 @@ function updateBudgetSummary() {
   elements.purchaseScore.textContent = `${score}%`;
 }
 
+function updateProjectCardTotals(project) {
+  document.querySelectorAll(`[data-project-id="${CSS.escape(project.id)}"] [data-project-total]`).forEach((totalElement) => {
+    totalElement.textContent = money(getProjectTotal(project));
+  });
+}
+
 function updateInlineRowBudget(input, item) {
   const row = input.closest("tr");
   const subtotalCell = row?.querySelector("[data-subtotal-cell]");
   if (subtotalCell) subtotalCell.textContent = money(subtotal(item));
   updateBudgetSummary();
+  updateProjectCardTotals(state);
 }
 
 function getVisibleItems() {
@@ -729,7 +723,7 @@ function renderProjectCard(project) {
       </button>
       <dl class="project-card-stats">
         <div><dt>清单</dt><dd>${itemCount} 项</dd></div>
-        <div><dt>总预算</dt><dd>${money(total)}</dd></div>
+        <div><dt>总预算</dt><dd data-project-total>${money(total)}</dd></div>
       </dl>
       <div class="project-card-actions" aria-label="项目操作">
         <button type="button" data-project-action="switch" data-project-id="${safeId}">切换</button>
@@ -750,7 +744,7 @@ function renderRow(item) {
       <td>${escapeHtml(item.spec)}</td>
       <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /> ${escapeHtml(item.unit)}</td>
       <td class="price-range customer-hidden">${escapeHtml(item.priceRange || formatPriceRange([Number(item.unitPrice || 0), Number(item.unitPrice || 0)]))}</td>
-      <td class="money customer-hidden"><input class="inline-price" type="text" inputmode="numeric" value="${escapeHtml(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
+      <td class="money customer-hidden"><input class="inline-price" type="text" inputmode="decimal" value="${escapeHtml(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
       <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
       <td><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
@@ -1049,7 +1043,6 @@ elements.tableBody.addEventListener("input", (event) => {
   if (!item) return;
   item[input.dataset.action] = parseInlineAmount(input.value);
   updateInlineRowBudget(input, item);
-  scheduleInlineEditSave();
 });
 
 elements.tableBody.addEventListener("change", (event) => {
@@ -1062,6 +1055,13 @@ elements.tableBody.addEventListener("focusout", (event) => {
   const input = event.target.closest("input[data-action]");
   if (!input) return;
   flushInlineEditSave();
+});
+
+elements.tableBody.addEventListener("keydown", (event) => {
+  const input = event.target.closest("input[data-action]");
+  if (!input || event.key !== "Enter") return;
+  event.preventDefault();
+  input.blur();
 });
 
 elements.tableBody.addEventListener("click", (event) => {
