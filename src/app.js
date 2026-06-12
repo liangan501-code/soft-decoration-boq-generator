@@ -1,5 +1,5 @@
-const LEGACY_STORAGE_KEY = "maison-boq-state-v1";
-const STORAGE_KEY = "maison-boq-workspace-v2";
+const STORAGE_KEY = "maison-boq-state-v1";
+const LEGACY_STORAGE_KEYS = ["maison-boq-workspace-v2", "maison-boq-state", "maison-boq-project"];
 function createId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -11,11 +11,12 @@ const PENDING_STATUSES = ["待确认", "采购询价中", "需复核尺寸"];
 
 const defaultProject = () => ({
   id: createId(),
-  projectTitle: "滨江私宅 240㎡ 软装 BOQ 管理",
-  clientMode: false,
-  exportMode: "client",
-  pendingOnly: false,
-  query: "",
+  name: "滨江私宅 240㎡ 软装 BOQ 管理",
+  clientName: "",
+  projectType: "私宅软装",
+  area: 240,
+  style: "雅奢",
+  targetBudget: 0,
   items: [
     {
       id: createId(),
@@ -206,7 +207,12 @@ const deliveryModes = {
 
 const workspace = loadWorkspace();
 let state = getActiveProject();
+let clientMode = false;
+let exportMode = "client";
+let pendingOnly = false;
+let query = "";
 let activeLibraryCard = null;
+saveState();
 
 const elements = {
   projectTitle: document.querySelector("#projectTitle"),
@@ -237,6 +243,10 @@ const elements = {
   exportModeInput: document.querySelector("#exportModeInput"),
   newProjectBtn: document.querySelector("#newProjectBtn"),
   importBtn: document.querySelector("#importBtn"),
+  backupExportBtn: document.querySelector("#backupExportBtn"),
+  backupImportBtn: document.querySelector("#backupImportBtn"),
+  backupFileInput: document.querySelector("#backupFileInput"),
+  restoreSamplesBtn: document.querySelector("#restoreSamplesBtn"),
   exportBtn: document.querySelector("#exportBtn"),
   printClientBtn: document.querySelector("#printClientBtn"),
   filterPendingBtn: document.querySelector("#filterPendingBtn"),
@@ -268,49 +278,98 @@ const elements = {
 };
 
 function loadWorkspace() {
-  try {
-    const cached = localStorage.getItem(STORAGE_KEY);
-    if (cached) return normalizeWorkspace(JSON.parse(cached));
+  const current = readStorageValue(STORAGE_KEY);
+  if (current) return normalizeWorkspace(migrateLegacyData(current) || current);
 
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacy = readStorageValue(key);
     if (legacy) {
-      const migratedProject = normalizeProject(JSON.parse(legacy));
-      migratedProject.id = migratedProject.id || createId();
-      return normalizeWorkspace({ activeProjectId: migratedProject.id, projects: [migratedProject] });
+      const migrated = migrateLegacyData(legacy);
+      return normalizeWorkspace(migrated);
     }
+  }
 
-    const project = defaultProject();
-    return { activeProjectId: project.id, projects: [project] };
+  const project = defaultProject();
+  return { version: 1, activeProjectId: project.id, projects: [project] };
+}
+
+function readStorageValue(key) {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? JSON.parse(cached) : null;
   } catch (error) {
-    console.warn("无法读取本地数据，已使用默认项目库", error);
-    const project = defaultProject();
-    return { activeProjectId: project.id, projects: [project] };
+    console.warn(`无法读取本地数据 ${key}`, error);
+    return null;
   }
 }
 
-function normalizeWorkspace(value) {
-  const projects = Array.isArray(value?.projects) && value.projects.length
-    ? value.projects.map(normalizeProject)
-    : [defaultProject()];
-  const activeProjectId = projects.some((project) => project.id === value?.activeProjectId) ? value.activeProjectId : projects[0].id;
-  return { activeProjectId, projects };
+function migrateLegacyData(value) {
+  if (Array.isArray(value?.projects)) return value;
+  if (Array.isArray(value?.items) || value?.projectTitle || value?.name) {
+    const project = normalizeProject(value);
+    return { version: 1, activeProjectId: project.id, projects: [project] };
+  }
+  if (Array.isArray(value)) {
+    const project = { ...defaultProject(), id: createId(), name: "旧版导入项目", items: value };
+    return { version: 1, activeProjectId: project.id, projects: [project] };
+  }
+  return null;
 }
 
-function normalizeProject(project) {
-  const normalized = {
-    ...defaultProject(),
-    ...project,
-    id: project?.id || createId(),
-    projectTitle: project?.projectTitle || "未命名软装项目",
-    clientMode: Boolean(project?.clientMode),
-    exportMode: project?.exportMode || "client",
-    pendingOnly: Boolean(project?.pendingOnly),
-    query: project?.query || "",
-    items: Array.isArray(project?.items) ? project.items : [],
+function normalizeWorkspace(value) {
+  const rawProjects = Array.isArray(value?.projects) && value.projects.length ? value.projects : null;
+  const projects = rawProjects ? rawProjects.map(normalizeProject) : [defaultProject()];
+  const uniqueProjects = dedupeProjects(projects);
+  const activeProjectId = uniqueProjects.some((project) => project.id === value?.activeProjectId)
+    ? value.activeProjectId
+    : uniqueProjects[0].id;
+  return { version: 1, activeProjectId, projects: uniqueProjects };
+}
+
+function dedupeProjects(projects) {
+  const seen = new Set();
+  return projects.map((project) => {
+    if (!seen.has(project.id)) {
+      seen.add(project.id);
+      return project;
+    }
+    const copy = { ...project, id: createId() };
+    seen.add(copy.id);
+    return copy;
+  });
+}
+
+function normalizeProject(project = {}) {
+  const fallback = defaultProject();
+  const name = project.name || project.projectTitle || fallback.name;
+  const items = Array.isArray(project.items) ? project.items.map(normalizeItem) : [];
+  return {
+    id: project.id || createId(),
+    name,
+    clientName: project.clientName || "",
+    projectType: project.projectType || "私宅软装",
+    area: normalizeArea(project.area ?? extractArea(name)),
+    style: project.style || inferProjectStyle(name),
+    targetBudget: Number(project.targetBudget || 0),
+    items,
   };
-  normalized.area = normalizeArea(project?.area ?? extractArea(normalized.projectTitle));
-  normalized.style = project?.style || inferProjectStyle(normalized.projectTitle);
-  return normalized;
+}
+
+function normalizeItem(item = {}) {
+  return {
+    id: item.id || createId(),
+    space: item.space || "未分区",
+    category: item.category || "待分类",
+    name: item.name || "未命名产品",
+    spec: item.spec || "",
+    quantity: Number(item.quantity || 0),
+    unit: item.unit || "件",
+    unitPrice: Number(item.unitPrice || item.price || 0),
+    priceRange: item.priceRange || "",
+    supplier: item.supplier || "",
+    status: item.status || "待确认",
+    note: item.note || item.remark || "",
+  };
 }
 
 function getActiveProject() {
@@ -318,8 +377,25 @@ function getActiveProject() {
   return active || workspace.projects[0];
 }
 
+function createPersistedWorkspace() {
+  return {
+    version: 1,
+    activeProjectId: workspace.activeProjectId,
+    projects: workspace.projects.map((project) => ({
+      id: project.id,
+      name: project.name,
+      clientName: project.clientName || "",
+      projectType: project.projectType || "",
+      area: normalizeArea(project.area),
+      style: project.style || "待定风格",
+      targetBudget: Number(project.targetBudget || 0),
+      items: project.items.map(normalizeItem),
+    })),
+  };
+}
+
 function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(createPersistedWorkspace()));
 }
 
 function extractArea(title) {
@@ -338,11 +414,11 @@ function inferProjectStyle(title) {
 }
 
 function getProjectArea(project) {
-  return normalizeArea(project.area ?? extractArea(project.projectTitle));
+  return normalizeArea(project.area ?? extractArea(project.name));
 }
 
 function getProjectStyle(project) {
-  return project.style || inferProjectStyle(project.projectTitle);
+  return project.style || inferProjectStyle(project.name);
 }
 
 function getProjectTotal(project) {
@@ -389,8 +465,8 @@ function buildTemplateItems(space, style) {
 
 function appendGeneratedItems(generatedItems, message) {
   state.items = [...state.items, ...generatedItems];
-  state.pendingOnly = false;
-  state.query = "";
+  pendingOnly = false;
+  query = "";
   saveState();
   render();
   document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
@@ -438,8 +514,8 @@ function selectLibraryStyle(style) {
 }
 
 function selectDeliveryMode(mode) {
-  state.exportMode = mode;
-  state.clientMode = mode === "client";
+  exportMode = mode;
+  clientMode = mode === "client";
   activeLibraryCard = "mode";
   saveState();
   render();
@@ -526,7 +602,7 @@ function renderStyleLibraryPanel() {
 }
 
 function renderModeLibraryPanel() {
-  const selectedMode = state.exportMode || "client";
+  const selectedMode = exportMode || "client";
   elements.templateLibraryPanel.innerHTML = `
     <div class="library-panel-header">
       <div>
@@ -552,11 +628,11 @@ function subtotal(item) {
 }
 
 function getVisibleItems() {
-  const query = state.query.trim().toLowerCase();
+  const searchQuery = query.trim().toLowerCase();
   return state.items.filter((item) => {
-    const matchesPending = !state.pendingOnly || PENDING_STATUSES.includes(item.status);
+    const matchesPending = !pendingOnly || PENDING_STATUSES.includes(item.status);
     const haystack = [item.space, item.category, item.name, item.spec, item.supplier, item.status].join(" ").toLowerCase();
-    return matchesPending && (!query || haystack.includes(query));
+    return matchesPending && (!searchQuery || haystack.includes(searchQuery));
   });
 }
 
@@ -566,16 +642,16 @@ function render() {
   const area = getProjectArea(state);
   const style = getProjectStyle(state);
 
-  elements.projectTitle.textContent = state.projectTitle;
-  elements.currentProjectName.textContent = state.projectTitle;
-  elements.projectMenuCurrent.textContent = state.projectTitle;
-  elements.reportModeLabel.textContent = state.exportMode === "internal" ? "软装全案 · 内部采购版" : "软装全案 · 客户汇报版";
+  elements.projectTitle.textContent = state.name;
+  elements.currentProjectName.textContent = state.name;
+  elements.projectMenuCurrent.textContent = state.name;
+  elements.reportModeLabel.textContent = exportMode === "internal" ? "软装全案 · 内部采购版" : "软装全案 · 客户汇报版";
   elements.projectMeta.textContent = `${workspace.projects.length} 个项目 · 当前 ${state.items.length} 项清单 · ${area ? `${area}㎡` : "面积待补充"} · ${style}`;
-  elements.searchInput.value = state.query;
-  elements.exportModeInput.value = state.exportMode || "client";
-  elements.clearFilterBtn.hidden = !state.pendingOnly;
-  elements.clientFieldsBtn.textContent = state.clientMode ? "客户版字段：已隐藏内部字段" : "客户版字段：全字段";
-  document.body.classList.toggle("client-mode", state.clientMode);
+  elements.searchInput.value = query;
+  elements.exportModeInput.value = exportMode || "client";
+  elements.clearFilterBtn.hidden = !pendingOnly;
+  elements.clientFieldsBtn.textContent = clientMode ? "客户版字段：已隐藏内部字段" : "客户版字段：全字段";
+  document.body.classList.toggle("client-mode", clientMode);
 
   renderProjectSwitcher();
 
@@ -613,7 +689,7 @@ function renderProjectCard(project) {
     <article class="project-card ${isActive ? "is-active" : ""}" data-project-id="${safeId}">
       <button class="project-card-main" type="button" data-project-action="switch" data-project-id="${safeId}" aria-current="${isActive ? "true" : "false"}">
         <span class="project-card-kicker">${isActive ? "当前项目" : "点击切换"}</span>
-        <strong>${escapeHtml(project.projectTitle)}</strong>
+        <strong>${escapeHtml(project.name)}</strong>
         <span class="project-card-meta">${area ? `${area}㎡` : "面积待补充"} · ${escapeHtml(style)}</span>
       </button>
       <dl class="project-card-stats">
@@ -715,14 +791,76 @@ function updateFormSubtotal() {
 function importSamples() {
   const imported = sampleImportItems.map((item) => ({ ...item, id: createId() }));
   state.items = [...state.items, ...imported];
-  state.pendingOnly = false;
+  pendingOnly = false;
   saveState();
   render();
   showToast(`已导入 ${imported.length} 条示例清单数据`);
 }
 
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportBackupJson() {
+  saveState();
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+  downloadJson(`maison-boq-backup-${timestamp}.json`, createPersistedWorkspace());
+  showToast("已导出完整项目备份 JSON");
+}
+
+function importBackupJson(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const parsed = JSON.parse(String(reader.result || "{}"));
+      const nextWorkspace = normalizeWorkspace(migrateLegacyData(parsed) || parsed);
+      if (!window.confirm(`确认导入备份？将替换当前浏览器中的 ${workspace.projects.length} 个项目。建议先导出备份。`)) return;
+      workspace.version = 1;
+      workspace.activeProjectId = nextWorkspace.activeProjectId;
+      workspace.projects = nextWorkspace.projects;
+      state = getActiveProject();
+      pendingOnly = false;
+      query = "";
+      saveState();
+      render();
+      showToast(`已导入 ${workspace.projects.length} 个项目备份`);
+    } catch (error) {
+      console.warn("导入备份失败", error);
+      showToast("备份 JSON 格式不正确，导入失败");
+    } finally {
+      elements.backupFileInput.value = "";
+    }
+  });
+  reader.readAsText(file, "utf-8");
+}
+
+function restoreSampleData() {
+  const firstConfirm = window.confirm("恢复示例数据会覆盖当前所有项目。是否已先导出备份 JSON？");
+  if (!firstConfirm) return;
+  const secondConfirm = window.confirm("请再次确认：这会用示例项目替换当前 localStorage 数据，真实项目将不再显示。");
+  if (!secondConfirm) return;
+  const project = defaultProject();
+  workspace.version = 1;
+  workspace.activeProjectId = project.id;
+  workspace.projects = [project];
+  state = project;
+  pendingOnly = false;
+  query = "";
+  clientMode = false;
+  exportMode = "client";
+  saveState();
+  render();
+  showToast("已恢复示例数据");
+}
+
 function exportCsv() {
-  const isClientReport = state.exportMode !== "internal";
+  const isClientReport = exportMode !== "internal";
   const headers = isClientReport
     ? ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "预算小计", "状态", "客户备注"]
     : ["空间", "品类", "产品名称", "常见尺寸/材质/颜色", "数量", "单位", "建议单价区间", "执行单价", "预算小计", "供应商", "状态", "内部备注"];
@@ -734,7 +872,7 @@ function exportCsv() {
   const link = document.createElement("a");
   const modeName = isClientReport ? "客户汇报版" : "内部采购版";
   link.href = URL.createObjectURL(blob);
-  link.download = `${state.projectTitle.replace(/[\\/:*?"<>|]/g, "-")}-${modeName}.csv`;
+  link.download = `${state.name.replace(/[\\/:*?"<>|]/g, "-")}-${modeName}.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
   showToast(`已导出 ${modeName} CSV`);
@@ -751,14 +889,14 @@ function csvCell(value) {
 }
 
 function printClientPdf() {
-  const previousClientMode = state.clientMode;
-  state.clientMode = true;
+  const previousClientMode = clientMode;
+  clientMode = true;
   render();
   document.body.classList.add("printing-client");
   window.setTimeout(() => {
     window.print();
     document.body.classList.remove("printing-client");
-    state.clientMode = previousClientMode;
+    clientMode = previousClientMode;
     render();
   }, 80);
 }
@@ -768,7 +906,7 @@ function addProject() {
   if (!name?.trim()) return;
   const area = normalizeArea(window.prompt("请输入项目面积（㎡，可留空）", extractArea(name) || ""));
   const style = window.prompt("请输入项目风格（可留空）", inferProjectStyle(name) === "待定风格" ? "" : inferProjectStyle(name))?.trim() || "待定风格";
-  const project = { ...defaultProject(), projectTitle: name.trim(), area, style, items: [] };
+  const project = { ...defaultProject(), name: name.trim(), area, style, items: [] };
   workspace.projects.push(project);
   workspace.activeProjectId = project.id;
   state = project;
@@ -786,17 +924,17 @@ function switchProject(projectId) {
   closeProjectMenu();
   saveState();
   render();
-  showToast(`已切换到「${state.projectTitle}」`);
+  showToast(`已切换到「${state.name}」`);
 }
 
 function renameProject(projectId) {
   const project = workspace.projects.find((entry) => entry.id === projectId);
   if (!project) return;
-  const nextName = window.prompt("请输入新的项目名称", project.projectTitle);
+  const nextName = window.prompt("请输入新的项目名称", project.name);
   if (!nextName?.trim()) return;
   const nextArea = normalizeArea(window.prompt("请输入项目面积（㎡，可留空）", getProjectArea(project) || ""));
   const nextStyle = window.prompt("请输入项目风格（可留空）", getProjectStyle(project))?.trim() || "待定风格";
-  project.projectTitle = nextName.trim();
+  project.name = nextName.trim();
   project.area = nextArea;
   project.style = nextStyle;
   saveState();
@@ -810,7 +948,7 @@ function duplicateProject(projectId) {
   const copy = {
     ...project,
     id: createId(),
-    projectTitle: `${project.projectTitle} 副本`,
+    name: `${project.name} 副本`,
     items: cloneProjectItems(project.items),
   };
   workspace.projects.push(copy);
@@ -829,7 +967,7 @@ function deleteProject(projectId) {
     showToast("至少保留一个项目，无法删除最后一个项目");
     return;
   }
-  if (!window.confirm(`确认删除项目“${project.projectTitle}”？此操作不会保留该项目清单。`)) return;
+  if (!window.confirm(`确认删除项目“${project.name}”？此操作不会保留该项目清单。`)) return;
   workspace.projects = workspace.projects.filter((entry) => entry.id !== projectId);
   if (workspace.activeProjectId === projectId) {
     workspace.activeProjectId = workspace.projects[0].id;
@@ -965,35 +1103,39 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeProjectMenu();
 });
 elements.exportModeInput.addEventListener("change", (event) => {
-  state.exportMode = event.target.value;
-  state.clientMode = event.target.value === "client";
+  exportMode = event.target.value;
+  clientMode = event.target.value === "client";
   saveState();
   render();
-  showToast(state.exportMode === "client" ? "已切换为客户汇报版导出" : "已切换为内部采购版导出");
+  showToast(exportMode === "client" ? "已切换为客户汇报版导出" : "已切换为内部采购版导出");
 });
 elements.importBtn.addEventListener("click", importSamples);
+elements.backupExportBtn.addEventListener("click", exportBackupJson);
+elements.backupImportBtn.addEventListener("click", () => elements.backupFileInput.click());
+elements.backupFileInput.addEventListener("change", (event) => importBackupJson(event.target.files?.[0]));
+elements.restoreSamplesBtn.addEventListener("click", restoreSampleData);
 elements.exportBtn.addEventListener("click", exportCsv);
 elements.printClientBtn.addEventListener("click", printClientPdf);
 elements.filterPendingBtn.addEventListener("click", () => {
-  state.pendingOnly = true;
+  pendingOnly = true;
   saveState();
   render();
   document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
   showToast("已筛选待确认、采购询价中、需复核尺寸的产品");
 });
 elements.clearFilterBtn.addEventListener("click", () => {
-  state.pendingOnly = false;
+  pendingOnly = false;
   saveState();
   render();
 });
 elements.clientFieldsBtn.addEventListener("click", () => {
-  state.clientMode = !state.clientMode;
+  clientMode = !clientMode;
   saveState();
   render();
-  showToast(state.clientMode ? "已隐藏供应商、单价和内部备注" : "已显示完整内部字段");
+  showToast(clientMode ? "已隐藏供应商、单价和内部备注" : "已显示完整内部字段");
 });
 elements.searchInput.addEventListener("input", (event) => {
-  state.query = event.target.value;
+  query = event.target.value;
   saveState();
   render();
 });

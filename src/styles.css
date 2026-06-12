@@ -120,6 +120,7 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -.04em; }
 }
 .icon-button { width: 44px; padding: 0; color: #393b36; background: #fffaf1; }
 .ghost-button { color: #433f36; background: rgba(255, 255, 255, .72); border: 1px solid rgba(40,43,38,.08); }
+.ghost-button.danger-soft { color: #8e3f33; background: rgba(255, 242, 237, .82); border-color: rgba(154, 60, 47, .16); }
 .primary-button { color: #fff8ec; background: linear-gradient(135deg, #252820, #4f4f40); box-shadow: 0 14px 28px rgba(31, 35, 32, .18); }
 .secondary-button { color: #2c302a; background: #efe3ce; }
 
