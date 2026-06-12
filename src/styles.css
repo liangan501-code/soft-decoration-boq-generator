@@ -907,3 +907,85 @@ td {
   align-items: initial;
 }
 .ai-generator .template-controls label { min-width: 0; }
+
+.item-code {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #6b4b1d;
+  background: #f2e3c4;
+  font-size: 12px;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.product-image-cell { display: grid; gap: 8px; min-width: 150px; }
+.boq-product-image {
+  width: 148px;
+  height: 104px;
+  object-fit: cover;
+  border: 1px solid rgba(48, 50, 44, .1);
+  border-radius: 16px;
+  background: #f4ecde;
+  box-shadow: 0 10px 24px rgba(52,47,38,.08);
+}
+.image-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.product-image-cell small, .sample-board-cell small { color: #968b79; font-size: 12px; font-weight: 700; }
+.material-cell { min-width: 180px; color: #5f584d; }
+.sample-board-cell { display: grid; gap: 8px; min-width: 170px; }
+.sample-thumbs { display: flex; align-items: center; gap: 8px; min-height: 54px; }
+.sample-thumbs.is-empty {
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px dashed rgba(164, 127, 64, .35);
+  border-radius: 14px;
+  color: #9a8d79;
+  background: #fffaf1;
+  font-size: 12px;
+  font-weight: 800;
+}
+.sample-thumb-wrap { position: relative; display: inline-flex; }
+.sample-thumb {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border: 1px solid rgba(48, 50, 44, .12);
+  border-radius: 12px;
+  background: #f3ead9;
+}
+.sample-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #9a3c2f;
+  cursor: pointer;
+  line-height: 20px;
+}
+.sample-preview {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 40;
+  display: none;
+  width: 220px;
+  height: 160px;
+  object-fit: cover;
+  border: 8px solid #fffaf1;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(31,35,32,.22);
+}
+.sample-thumb-wrap:hover .sample-preview { display: block; }
+.client-mode .customer-hidden, .client-mode .internal-only { display: none; }
+.client-mode table { min-width: 1320px; }
+@media print {
+  .internal-only, .no-print { display: none !important; }
+  .boq-product-image { width: 86px; height: 64px; border-radius: 8px; }
+  .sample-thumb { width: 34px; height: 34px; border-radius: 7px; }
+  .sample-preview { display: none !important; }
+  .product-image-cell, .sample-board-cell { min-width: 0; }
+}
