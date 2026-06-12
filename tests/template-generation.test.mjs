@@ -3,6 +3,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const source = readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const generationSource = source.slice(source.indexOf("function runTemplateGeneration"), source.indexOf("function setLibraryCard"));
 
 test("template generator contains explicit style-specific living room product names", () => {
   for (const name of [
@@ -29,12 +31,15 @@ test("template generator contains explicit style-specific living room product na
   }
 });
 
-test("current-space generation asks whether to replace append or cancel existing items", () => {
-  assert.match(source, /requestTemplateConflictAction/);
-  assert.match(source, /当前空间/);
-  assert.match(source, /替换/);
-  assert.match(source, /追加/);
-  assert.match(source, /取消/);
+test("current-space generation replaces existing space items without confirmation", () => {
+  assert.doesNotMatch(source, /requestTemplateConflictAction/);
+  assert.doesNotMatch(source, /getGenerationAction/);
+  assert.doesNotMatch(source, /templateConflictDialog/);
+  assert.doesNotMatch(html, /templateConflictDialog|生成模板确认|当前空间已有清单|value="追加"/);
+  assert.doesNotMatch(generationSource, /window\.prompt/);
+  assert.match(generationSource, /const space = elements\.templateSpaceInput\.value;/);
+  assert.match(generationSource, new RegExp("runTemplateGeneration\\(\\{\\n    spaces: \\[space\\]"));
+  assert.match(generationSource, /applyGeneratedItems\(generatedItems, successMessage\(style, generatedItems\), spaces, style, spaces\)/);
   assert.match(source, /state\.items\.filter\(\(item\) => !replaceSpaces\.has\(item\.space\)\)/);
 });
 
@@ -95,7 +100,8 @@ test("selected dining style templates use independent product names", () => {
   assert.doesNotMatch(frenchDiningBlock, /奶油系餐厅主餐桌|奶油布艺餐椅|奶油风弧形吊灯/);
 });
 
-test("template generation saves generated items before rerendering the BOQ table", () => {
+test("template generation always replaces selected spaces, saves, and rerenders the BOQ table", () => {
   assert.match(source, /state\.items = replaceSpaces\.size \? replaceItemsForSpaces\(generatedItems, replaceSpaces\) : \[\.\.\.state\.items, \.\.\.generatedItems\];/);
+  assert.match(generationSource, /applyGeneratedItems\(generatedItems, successMessage\(style, generatedItems\), spaces, style, spaces\)/);
   assert.match(source, /saveState\(\);\n  render\(\);/);
 });

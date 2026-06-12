@@ -496,8 +496,6 @@ const elements = {
   formSubtotal: document.querySelector("#formSubtotal"),
   suggestionDialog: document.querySelector("#suggestionDialog"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
-  templateConflictDialog: document.querySelector("#templateConflictDialog"),
-  templateConflictMessage: document.querySelector("#templateConflictMessage"),
   toast: document.querySelector("#toast"),
 };
 
@@ -763,72 +761,33 @@ function applyGeneratedItems(generatedItems, message, spacesToReplace = [], styl
   showToast(message);
 }
 
-function requestTemplateConflictAction(message) {
-  if (!elements.templateConflictDialog?.showModal) {
-    const fallback = window.prompt(`${message}\n请输入：替换 / 追加 / 取消`, "替换");
-    if (fallback === "替换" || fallback === "追加") return Promise.resolve(fallback);
-    return Promise.resolve("取消");
-  }
-
-  elements.templateConflictMessage.textContent = message;
-  elements.templateConflictDialog.returnValue = "";
-  elements.templateConflictDialog.showModal();
-
-  return new Promise((resolve) => {
-    const handleClose = () => {
-      elements.templateConflictDialog.removeEventListener("close", handleClose);
-      resolve(elements.templateConflictDialog.returnValue || "取消");
-    };
-    elements.templateConflictDialog.addEventListener("close", handleClose);
-  });
-}
-
-async function getGenerationAction(spaces, scopeLabel) {
-  const hasExistingItems = state.items.some((item) => spaces.includes(item.space));
-  if (!hasExistingItems) return "追加";
-  return requestTemplateConflictAction(`${scopeLabel}已有清单，是否替换为新的风格模板？`);
-}
-
-async function runTemplateGeneration({ spaces, scopeLabel, cancelMessage, successMessage }) {
+function runTemplateGeneration({ spaces, successMessage }) {
   const style = elements.templateStyleInput.value;
-  const action = await getGenerationAction(spaces, scopeLabel);
-  if (action === "取消") {
-    showToast(cancelMessage);
-    return;
-  }
-
   const generatedItems = spaces.flatMap((space) => generateItemsForSpaceAndStyle(space, style));
-  const spacesToReplace = action === "替换" ? spaces : [];
-  applyGeneratedItems(generatedItems, successMessage(action, style, generatedItems), spacesToReplace, style, spaces);
+  applyGeneratedItems(generatedItems, successMessage(style, generatedItems), spaces, style, spaces);
 }
 
-async function generateTemplate() {
+function generateTemplate() {
   const space = elements.templateSpaceInput.value;
-  await runTemplateGeneration({
+  runTemplateGeneration({
     spaces: [space],
-    scopeLabel: "当前空间",
-    cancelMessage: "已取消生成，当前清单未改变",
-    successMessage: (action, style, generatedItems) => `已${action} ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`,
+    successMessage: (style, generatedItems) => `已替换 ${space} · ${style} 清单模板，共 ${generatedItems.length} 项产品`,
   });
 }
 
-async function generateAllSpacesTemplate() {
+function generateAllSpacesTemplate() {
   const spaces = Object.keys(spaceTemplates);
-  await runTemplateGeneration({
+  runTemplateGeneration({
     spaces,
-    scopeLabel: "当前项目空间",
-    cancelMessage: "已取消一键生成，当前清单未改变",
-    successMessage: (action, style, generatedItems) => `已${action} ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`,
+    successMessage: (style, generatedItems) => `已替换 ${spaces.length} 个空间 · ${style} 模板，共 ${generatedItems.length} 项产品`,
   });
 }
 
-async function applyLibraryTemplate() {
+function applyLibraryTemplate() {
   const space = elements.templateSpaceInput.value;
-  await runTemplateGeneration({
+  runTemplateGeneration({
     spaces: [space],
-    scopeLabel: "当前空间",
-    cancelMessage: "已取消应用模板库，当前清单未改变",
-    successMessage: (action, style, generatedItems) => `已${action}模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`,
+    successMessage: (style, generatedItems) => `已替换模板库 ${space} · ${style}，生成 ${generatedItems.length} 项软装清单`,
   });
 }
 
