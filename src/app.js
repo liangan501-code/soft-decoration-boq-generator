@@ -503,7 +503,7 @@ const deliveryModes = {
   client: {
     title: "客户汇报版",
     description: "隐藏供应商、内部备注、采购成本，适合客户评审与方案汇报。",
-    fields: ["空间", "品类", "产品名称", "尺寸材质", "预算小计", "状态"],
+    fields: ["空间", "品类", "软装产品彩图", "材料样板贴图", "尺寸材质", "预算小计", "状态"],
   },
   internal: {
     title: "内部采购版",
@@ -607,6 +607,13 @@ const elements = {
   renderingPickerDialog: document.querySelector("#renderingPickerDialog"),
   renderingPickerGrid: document.querySelector("#renderingPickerGrid"),
   closeRenderingPickerBtn: document.querySelector("#closeRenderingPickerBtn"),
+  materialSwatchDialog: document.querySelector("#materialSwatchDialog"),
+  closeMaterialSwatchBtn: document.querySelector("#closeMaterialSwatchBtn"),
+  materialSwatchImage: document.querySelector("#materialSwatchImage"),
+  materialSwatchName: document.querySelector("#materialSwatchName"),
+  materialSwatchType: document.querySelector("#materialSwatchType"),
+  materialSwatchProduct: document.querySelector("#materialSwatchProduct"),
+  materialSwatchNote: document.querySelector("#materialSwatchNote"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
   toast: document.querySelector("#toast"),
 };
@@ -704,6 +711,15 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
   const quantity = Number(item.quantity || 0);
   const inferredSource = inferProductImageSource(item);
   const productImageUploaded = inferredSource === "manual-upload";
+  const normalizedBase = {
+    ...item,
+    productName,
+    name: productName,
+    category: item.category || "待分类",
+    materialSuggestion,
+    priceRange: materialSuggestion,
+  };
+  const materialSwatches = normalizeMaterialSwatches(item.materialSwatches, normalizedBase, projectStyle);
   return {
     id: item.id || createId(),
     code: formatItemCode(index),
@@ -724,6 +740,7 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
     supplier: item.supplier || "",
     subtotal: Number(item.subtotal || quantity * unitPrice),
     status: item.status || "待确认",
+    materialSwatches,
     materialSampleImages: normalizeMaterialSampleImages(item.materialSampleImages),
     clientNote: item.clientNote || item.customerNote || "",
     clientVisible: item.clientVisible ?? item.customerVisible ?? true,
@@ -760,6 +777,181 @@ function normalizeMaterialSampleImages(images = []) {
       uploadedAt: image.uploadedAt || new Date().toISOString(),
     }).filter((image) => image.dataUrl || image.storageKey)
     : [];
+}
+
+
+const MATERIAL_SWATCH_RECIPES = {
+  餐桌: ["stone", "wood", "metal"],
+  餐椅: ["fabric", "leather", "metal", "wood"],
+  吊灯: ["metal", "glass", "acrylic"],
+  地毯: ["carpet", "velvet", "pattern"],
+  艺术摆件: ["ceramic", "metal", "stone"],
+  摆件: ["ceramic", "metal", "stone"],
+  茶几: ["stone", "wood", "metal", "glass"],
+  边几: ["stone", "wood", "metal"],
+  沙发: ["fabric", "leather", "wood"],
+  主沙发: ["fabric", "leather", "wood"],
+  休闲椅: ["fabric", "leather", "wood", "metal"],
+  单椅: ["leather", "fabric", "metal"],
+  窗帘: ["fabric", "linen", "sheer"],
+  床: ["fabric", "leather", "wood"],
+  床品: ["fabric", "linen", "pattern"],
+  装饰画: ["canvas", "wood", "metal"],
+  落地灯: ["metal", "fabric", "glass"],
+};
+
+const MATERIAL_STYLE_LABELS = {
+  奶油风: { stone: "米白石材", wood: "浅橡木", metal: "浅金金属", fabric: "奶油布艺", leather: "米灰皮革", glass: "柔白玻璃", acrylic: "雾面亚克力", carpet: "奶油绒毯", velvet: "短绒面", pattern: "浅色纹理", ceramic: "米白陶瓷", linen: "亚麻", sheer: "柔光纱", canvas: "肌理画布" },
+  中古风: { stone: "暖灰洞石", wood: "胡桃木", metal: "做旧铜", fabric: "橄榄布艺", leather: "复古皮革", glass: "茶色玻璃", acrylic: "琥珀亚克力", carpet: "手工羊毛", velvet: "复古绒面", pattern: "几何纹理", ceramic: "手作陶瓷", linen: "棉麻", sheer: "米灰纱", canvas: "抽象画布" },
+  轻奢风: { stone: "象牙岩板", wood: "烟熏木", metal: "香槟金属", fabric: "丝绒布艺", leather: "雾灰皮革", glass: "白玻璃", acrylic: "透光亚克力", carpet: "丝感地毯", velvet: "低光丝绒", pattern: "轻奢纹理", ceramic: "亮釉陶瓷", linen: "精纺布", sheer: "柔雾纱", canvas: "金属框画布" },
+  法式: { stone: "米色石材", wood: "雕花木", metal: "雾金金属", fabric: "奶油布艺", leather: "复古皮革", glass: "白玻璃", acrylic: "乳白亚克力", carpet: "法式花纹", velvet: "柔雾绒面", pattern: "卷草纹理", ceramic: "珍珠陶瓷", linen: "棉麻", sheer: "法式纱", canvas: "复古画布" },
+  雅奢: { stone: "暖灰大理石", wood: "深咖木饰面", metal: "古铜金属", fabric: "混纺面料", leather: "细纹真皮", glass: "烟灰玻璃", acrylic: "雾面亚克力", carpet: "手工羊毛", velvet: "哑光绒面", pattern: "低饱和纹理", ceramic: "艺术陶瓷", linen: "高级亚麻", sheer: "暖灰纱", canvas: "肌理画布" },
+  度假风: { stone: "沙色洞石", wood: "柚木", metal: "哑光铜", fabric: "亚麻布艺", leather: "自然皮革", glass: "清透玻璃", acrylic: "海盐亚克力", carpet: "自然编织", velvet: "短绒面", pattern: "棕榈纹理", ceramic: "手工陶", linen: "粗织亚麻", sheer: "海盐纱", canvas: "自然画布" },
+  黑金风: { stone: "黑色岩板", wood: "深色木饰面", metal: "黑钛金属", fabric: "深灰布艺", leather: "黑色皮革", glass: "黑晶玻璃", acrylic: "曜石亚克力", carpet: "深灰羊毛", velvet: "黑金绒面", pattern: "暗纹纹理", ceramic: "黑釉陶瓷", linen: "黑灰织物", sheer: "烟灰纱", canvas: "黑金画布" },
+  现代东方: { stone: "深色石材", wood: "胡桃木", metal: "哑光铜", fabric: "亚麻布艺", leather: "深棕皮革", glass: "烟墨玻璃", acrylic: "宣纸亚克力", carpet: "东方织纹", velvet: "墨色绒面", pattern: "留白纹理", ceramic: "手作陶", linen: "亚麻", sheer: "宣纸纱", canvas: "水墨画布" },
+};
+
+const MATERIAL_BASE_COLORS = {
+  stone: ["#f2eadc", "#b8aa98", "#8f887d"], wood: ["#8a5f3d", "#5b3824", "#c69a67"], metal: ["#e3c875", "#9d7935", "#f7e5a6"], fabric: ["#efe4d2", "#c8b79e", "#fff8ec"], leather: ["#9b6740", "#5b3523", "#d39b66"], glass: ["#eef4f1", "#b9cbc6", "#ffffff"], acrylic: ["#f6f1e8", "#d5cbbd", "#ffffff"], carpet: ["#e9dcc8", "#b79f82", "#f8f0e3"], velvet: ["#c8b28e", "#7e694c", "#ead8b8"], pattern: ["#efe6d7", "#9b8d78", "#d7c6ac"], ceramic: ["#f6efe3", "#c5b191", "#fffaf1"], linen: ["#eadcc6", "#b8a186", "#fff7e8"], sheer: ["#fbf7ef", "#ddd1c1", "#ffffff"], canvas: ["#ece0ce", "#b9a78f", "#fffaf1"], acrylic: ["#f4eee8", "#cbbfaf", "#ffffff"]
+};
+
+function normalizeMaterialSwatches(swatches = [], product = {}, projectStyle = getProjectStyle(state || {})) {
+  const normalized = Array.isArray(swatches)
+    ? swatches.filter(Boolean).slice(0, 4).map((swatch) => normalizeMaterialSwatch(swatch, product, projectStyle)).filter(Boolean)
+    : [];
+  const manualSwatches = normalized.filter((swatch) => swatch.source === "manual-upload");
+  const currentGeneratedSwatches = normalized.filter((swatch) => swatch.source !== "manual-upload" && swatch.style === projectStyle);
+  if (manualSwatches.length) {
+    const recommended = generateMaterialSwatchesFromProduct({ ...product, style: projectStyle });
+    return [...manualSwatches, ...recommended.filter((swatch) => !manualSwatches.some((manual) => manual.id === swatch.id))].slice(0, 4);
+  }
+  if (currentGeneratedSwatches.length) return currentGeneratedSwatches.slice(0, 4);
+  return generateMaterialSwatchesFromProduct({ ...product, style: projectStyle }).slice(0, 4);
+}
+
+function normalizeMaterialSwatch(swatch, product = {}, projectStyle = getProjectStyle(state || {})) {
+  if (typeof swatch === "string") return materialSampleToSwatch({ id: createId(), dataUrl: swatch, name: "材料样板" }, product);
+  const type = swatch.type || inferSwatchType(`${swatch.name || ""} ${product.category || ""} ${product.materialSuggestion || product.priceRange || ""}`);
+  const normalized = {
+    id: swatch.id || createId(),
+    name: swatch.name || getMaterialLabel(type, projectStyle),
+    type,
+    category: swatch.category || getMaterialTypeName(type),
+    image: swatch.image || swatch.dataUrl || swatch.url || "",
+    dataUrl: swatch.dataUrl || swatch.image || swatch.url || "",
+    source: swatch.source || (swatch.storageKey ? "manual-upload" : "mock-ai"),
+    note: swatch.note || buildSwatchNote(type, product),
+    productName: swatch.productName || product.productName || product.name || product.category || "软装产品",
+    storageKey: swatch.storageKey || "",
+    storage: swatch.storage || (swatch.storageKey ? "indexedDB" : "inline-svg"),
+    style: swatch.style || projectStyle,
+    shortLabel: swatch.shortLabel || swatch.name || getMaterialLabel(type, projectStyle),
+  };
+  normalized.image = normalized.image || createMaterialSwatchImage(normalized);
+  normalized.dataUrl = normalized.dataUrl || normalized.image;
+  return normalized;
+}
+
+function materialSampleToSwatch(sample, product = {}) {
+  return normalizeMaterialSwatch({
+    id: sample.id || createId(),
+    name: sample.name || "上传样板",
+    type: sample.type?.startsWith?.("image/") ? inferSwatchType(product.materialSuggestion || product.category) : sample.type,
+    image: sample.dataUrl || sample.image || "",
+    dataUrl: sample.dataUrl || sample.image || "",
+    source: "manual-upload",
+    note: "手动上传的真实材料样板，可与自动推荐贴图并存。",
+    storageKey: sample.storageKey || "",
+    storage: sample.storage || (sample.storageKey ? "indexedDB" : "localStorage"),
+  }, product, getProjectStyle(state));
+}
+
+function generateMaterialSwatchesFromProduct(product = {}) {
+  const style = product.style || getProjectStyle(state || {}) || "雅奢";
+  const category = product.category || "软装";
+  const materialText = `${category} ${product.productName || product.name || ""} ${product.materialSuggestion || product.priceRange || ""}`;
+  const recipe = getMaterialRecipe(category, materialText).slice(0, 4);
+  return recipe.map((type, index) => normalizeMaterialSwatch({
+    id: buildGeneratedSwatchId(product, style, type, index),
+    name: getMaterialLabel(type, style),
+    type,
+    source: "mock-ai",
+    note: buildSwatchNote(type, product),
+    style,
+  }, product, style));
+}
+
+function generateMaterialSwatchesFromReferenceImages(product = {}, uploadedImages = []) {
+  const uploaded = uploadedImages.map((image) => materialSampleToSwatch(image, product));
+  const generated = generateMaterialSwatchesFromProduct({ ...product, sourceImages: uploadedImages.length });
+  return [...uploaded, ...generated].slice(0, 4);
+}
+
+function buildSwatchPreviewData(product = {}) {
+  const uploadedImages = normalizeMaterialSampleImages(product.materialSampleImages);
+  const swatches = uploadedImages.length
+    ? generateMaterialSwatchesFromReferenceImages(product, uploadedImages)
+    : normalizeMaterialSwatches(product.materialSwatches, product, getProjectStyle(state));
+  product.materialSwatches = swatches.slice(0, 4);
+  return product.materialSwatches;
+}
+
+function getMaterialRecipe(category = "", materialText = "") {
+  const directKey = Object.keys(MATERIAL_SWATCH_RECIPES).find((key) => category.includes(key) || materialText.includes(key));
+  if (directKey) return MATERIAL_SWATCH_RECIPES[directKey];
+  const inferred = ["wood", "stone", "metal", "fabric", "leather", "glass", "carpet", "ceramic"].filter((type) => materialText.includes(getMaterialTypeName(type).replace(/材|面|纹理/g, "")) || materialText.includes(getMaterialLabel(type, getProjectStyle(state))));
+  return inferred.length ? inferred : ["fabric", "wood", "metal"];
+}
+
+function buildGeneratedSwatchId(product, style, type, index) {
+  const base = `${product.id || product.code || product.category || "item"}-${style}-${type}-${index}`;
+  return `swatch-${base}`.replace(/[^\w\u4e00-\u9fa5-]+/g, "-");
+}
+
+function inferSwatchType(text = "") {
+  if (/木|胡桃|橡木|柚木|木饰面/.test(text)) return "wood";
+  if (/石|岩板|大理石|洞石/.test(text)) return "stone";
+  if (/金|铜|不锈钢|钛|金属/.test(text)) return "metal";
+  if (/皮|真皮|皮革/.test(text)) return "leather";
+  if (/玻璃/.test(text)) return "glass";
+  if (/亚克力/.test(text)) return "acrylic";
+  if (/毯|羊毛|绒|织/.test(text)) return "carpet";
+  if (/陶/.test(text)) return "ceramic";
+  return "fabric";
+}
+
+function getMaterialLabel(type, style = "雅奢") {
+  return MATERIAL_STYLE_LABELS[style]?.[type] || MATERIAL_STYLE_LABELS.雅奢[type] || getMaterialTypeName(type);
+}
+
+function getMaterialTypeName(type) {
+  return ({ wood: "木饰面", stone: "石材", metal: "金属", fabric: "布艺", leather: "皮革", glass: "玻璃", acrylic: "亚克力", carpet: "地毯纹理", velvet: "绒面", pattern: "图案纹理", ceramic: "陶瓷", linen: "亚麻", sheer: "纱帘", canvas: "画布" })[type] || "综合材质";
+}
+
+function buildSwatchNote(type, product = {}) {
+  const category = product.category || "软装产品";
+  const use = ({ stone: "建议用于桌面、台面或重点饰面。", wood: "建议用于框架、柜体或温润底座。", metal: "建议用于脚架、灯体或收口线条。", fabric: "建议用于坐面、靠包、窗帘或软包。", leather: "建议用于椅面、扶手或高触感软包。", glass: "建议用于灯罩、台面或通透层次。", acrylic: "建议用于灯罩、装饰件或轻透结构。", carpet: "建议用于地毯主材，关注脚感与耐污。", velvet: "建议用于局部软包或高级触感表面。", pattern: "建议用于地毯、床品或装饰面层。", ceramic: "建议用于艺术摆件、花器或陈设。", linen: "建议用于窗帘、床品与松弛感软包。", sheer: "建议用于纱帘与柔光层。", canvas: "建议用于装饰画肌理与框画表面。" })[type] || "建议结合现场色板复核。";
+  return `${category}自动推荐：${use}`;
+}
+
+function createMaterialSwatchImage(swatch = {}) {
+  const type = swatch.type || "fabric";
+  const colors = MATERIAL_BASE_COLORS[type] || MATERIAL_BASE_COLORS.fabric;
+  const name = swatch.name || getMaterialTypeName(type);
+  const texture = getMaterialTextureSvg(type, colors);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="${escapeHtml(name)}材料样板"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${colors[0]}"/><stop offset="1" stop-color="${colors[1]}"/></linearGradient><filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.72" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 .16"/></feComponentTransfer></filter></defs><rect width="240" height="240" rx="18" fill="url(#bg)"/><rect width="240" height="240" rx="18" filter="url(#grain)" opacity=".55"/>${texture}<rect x="10" y="10" width="220" height="220" rx="14" fill="none" stroke="rgba(255,250,241,.42)" stroke-width="2"/></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function getMaterialTextureSvg(type, colors) {
+  if (type === "wood") return `<path d="M20 50c44-28 78 12 120-12 36-21 56-4 80 12M10 105c48-24 78 22 124-5 34-20 62 2 92 16M18 164c52-22 82 20 132-8 30-17 50-5 72 12" fill="none" stroke="${colors[2]}" stroke-opacity=".42" stroke-width="8" stroke-linecap="round"/>`;
+  if (type === "stone") return `<path d="M-20 70c65 28 92-36 154-8 44 20 70 5 126-20M-10 176c58-22 90 26 142-2 42-23 70-9 118 10" fill="none" stroke="${colors[2]}" stroke-opacity=".36" stroke-width="5"/><path d="M58 0c-8 54 26 80 9 132-10 32 0 70 22 108" fill="none" stroke="#fffaf1" stroke-opacity=".22" stroke-width="3"/>`;
+  if (type === "metal") return `<rect width="240" height="240" fill="url(#bg)"/><path d="M-30 210L210-30M20 250L250 20M-40 100L100-40" stroke="#fff5d7" stroke-opacity=".26" stroke-width="18"/><path d="M0 0h240v240H0z" fill="${colors[2]}" opacity=".08"/>`;
+  if (["fabric", "linen", "sheer"].includes(type)) return `<path d="M0 45h240M0 92h240M0 139h240M0 186h240M45 0v240M92 0v240M139 0v240M186 0v240" stroke="${colors[2]}" stroke-opacity=".24" stroke-width="2"/>`;
+  if (["carpet", "velvet"].includes(type)) return `<g stroke="${colors[2]}" stroke-opacity=".35" stroke-width="3">${Array.from({ length: 12 }, (_, i) => `<path d="M${i * 22} 0c16 24-16 42 0 66s-16 42 0 66-16 42 0 108"/>`).join("")}</g>`;
+  if (type === "pattern") return `<g fill="none" stroke="${colors[2]}" stroke-opacity=".34" stroke-width="5">${Array.from({ length: 4 }, (_, i) => `<circle cx="${60 + i * 42}" cy="${70 + (i % 2) * 54}" r="28"/>`).join("")}</g>`;
+  if (["glass", "acrylic"].includes(type)) return `<path d="M20 210L210 20" stroke="#fff" stroke-opacity=".55" stroke-width="22"/><path d="M80 236L236 80" stroke="#fff" stroke-opacity=".32" stroke-width="10"/>`;
+  return `<circle cx="62" cy="62" r="34" fill="${colors[2]}" opacity=".2"/><circle cx="168" cy="142" r="52" fill="#fffaf1" opacity=".16"/>`;
 }
 
 function extractSizeFromLegacySpec(spec = "") {
@@ -851,6 +1043,9 @@ function createPersistedItem(item, index, projectStyle) {
     normalized.productImage = "";
     normalized.productImageStorage = "indexedDB";
   }
+  normalized.materialSwatches = normalizeMaterialSwatches(normalized.materialSwatches, normalized, projectStyle).map((swatch) => (
+    swatch.source === "manual-upload" && swatch.storageKey ? { ...swatch, image: "", dataUrl: "", storage: "indexedDB" } : swatch
+  ));
   normalized.materialSampleImages = normalizeMaterialSampleImages(normalized.materialSampleImages).map((image) => (
     image.storageKey ? { ...image, dataUrl: "", storage: "indexedDB" } : { ...image, dataUrl: "" }
   ));
@@ -1059,6 +1254,10 @@ async function hydrateWorkspaceFromIndexedDb() {
     ...(project.items || []).flatMap((item) => (item.materialSampleImages || []).filter((image) => image.storageKey && !image.dataUrl).map((image) => ({
       storageKey: image.storageKey,
       setDataUrl: (dataUrl) => { image.dataUrl = dataUrl; },
+    }))),
+    ...(project.items || []).flatMap((item) => (item.materialSwatches || []).filter((swatch) => swatch.storageKey && !swatch.image).map((swatch) => ({
+      storageKey: swatch.storageKey,
+      setDataUrl: (dataUrl) => { swatch.image = dataUrl; swatch.dataUrl = dataUrl; },
     }))),
   ]);
   if (!imageFiles.length) return;
@@ -1968,8 +2167,11 @@ function promptItemImageUpload(item, kind) {
         showToast("已上传/替换真实软装产品彩图，产品彩图已压缩至最长边 800px");
       } else {
         const existing = normalizeMaterialSampleImages(item.materialSampleImages);
-        item.materialSampleImages = [...existing, ...images].slice(0, 3);
-        showToast(`已上传 ${Math.min(images.length, 3)} 张材料样板贴图，已压缩至最长边 600px`);
+        item.materialSampleImages = [...existing, ...images].slice(0, 4);
+        const uploadedSwatches = images.map((image) => materialSampleToSwatch(image, item));
+        const generatedSwatches = normalizeMaterialSwatches(item.materialSwatches, item, getProjectStyle(state)).filter((swatch) => swatch.source !== "manual-upload");
+        item.materialSwatches = [...uploadedSwatches, ...generatedSwatches].slice(0, 4);
+        showToast(`已上传 ${Math.min(images.length, 4)} 张材料样板贴图，已压缩至最长边 600px`);
       }
       saveState();
       render();
@@ -2047,6 +2249,7 @@ function removeMaterialSample(item, sampleId) {
   const removed = normalizeMaterialSampleImages(item.materialSampleImages).find((image) => image.id === sampleId);
   if (removed?.storageKey) deleteImageFromIndexedDb(removed.storageKey).catch((error) => console.warn("删除材料样板 IndexedDB 失败", error));
   item.materialSampleImages = normalizeMaterialSampleImages(item.materialSampleImages).filter((image) => image.id !== sampleId);
+  item.materialSwatches = normalizeMaterialSwatches(item.materialSwatches, item, getProjectStyle(state)).filter((swatch) => swatch.id !== sampleId);
   saveState();
   render();
   showToast("已删除材料样板贴图");
@@ -2116,7 +2319,7 @@ function render() {
 
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
-    : '<tr><td colspan="16" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
+    : '<tr><td colspan="13" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
   updateBudgetSummary();
   renderTemplateLibrary();
@@ -2164,15 +2367,15 @@ function renderRow(item) {
   const size = item.size || extractSizeFromLegacySpec(item.spec) || item.spec || "按图纸复核";
   const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || "待确认材质、颜色与工艺";
   const productImage = resolveProductImage(item);
-  const materialSamples = normalizeMaterialSampleImages(item.materialSampleImages);
+  const materialSwatches = buildSwatchPreviewData(item);
   const clientVisible = item.clientVisible ?? item.customerVisible ?? true;
   return `
     <tr>
       <td><strong class="item-code">${escapeHtml(code)}</strong></td>
       <td><strong>${escapeHtml(item.space)}</strong></td>
       <td>${escapeHtml(item.category)}</td>
-      <td>${renderProductImageCell(item, productImage, safeId)}</td>
-      <td class="item-cell">${escapeHtml(productName)}</td>
+      <td>${renderProductImageCell(item, productImage, safeId, productName)}</td>
+      <td>${renderMaterialSwatchesCell(materialSwatches, safeId)}</td>
       <td>${escapeHtml(size)}</td>
       <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /></td>
       <td class="material-cell">${escapeHtml(materialSuggestion)}</td>
@@ -2180,9 +2383,6 @@ function renderRow(item) {
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
       <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
       <td class="internal-only"><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
-      <td>${renderMaterialSamplesCell(materialSamples, safeId)}</td>
-      <td class="note-cell">${escapeHtml(item.clientNote || customerNote(item))}</td>
-      <td class="internal-only">${clientVisible === false ? "否" : "是"}</td>
       <td class="actions-col row-actions internal-only">
         <button type="button" class="mini-button" data-action="edit" data-id="${safeId}">编辑</button>
         <button type="button" class="mini-button danger" data-action="delete" data-id="${safeId}">删除</button>
@@ -2190,7 +2390,7 @@ function renderRow(item) {
     </tr>`;
 }
 
-function renderProductImageCell(item, productImage, safeId) {
+function renderProductImageCell(item, productImage, safeId, productName = "") {
   const sourceClassName = getProductImageSourceClassName(item);
   const cropMeta = PRODUCT_IMAGE_CROPS[item.productImageCrop?.type || "full"] || PRODUCT_IMAGE_CROPS.full;
   const fallbackImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
@@ -2199,6 +2399,7 @@ function renderProductImageCell(item, productImage, safeId) {
       <div class="product-image-card">
         <img class="boq-product-image ${cropMeta.className}" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(fallbackImage)}';" />
       </div>
+      <strong class="product-image-title">${escapeHtml(productName || item.category || "软装产品")}</strong>
       <div class="image-actions no-print">
         <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传 / 替换</button>
         <button type="button" class="mini-button" data-action="pick-rendering-image" data-id="${safeId}">从方案图选择</button>
@@ -2256,19 +2457,35 @@ function getProductImageSourceMeta(item) {
 }
 
 
-function renderMaterialSamplesCell(samples, safeId) {
-  const thumbs = samples.map((image) => `
-    <span class="sample-thumb-wrap">
-      <img class="sample-thumb" src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.name || "材料样板贴图")}" />
-      <img class="sample-preview" src="${escapeHtml(image.dataUrl)}" alt="材料样板大图预览" />
-      <button type="button" class="sample-remove no-print" data-action="remove-material-sample" data-id="${safeId}" data-sample-id="${escapeHtml(image.id)}" aria-label="删除材料样板">×</button>
-    </span>`).join("");
+function renderMaterialSwatchesCell(swatches, safeId) {
+  const displaySwatches = swatches.length ? swatches.slice(0, 4) : generateMaterialSwatchesFromProduct({ category: "软装", productName: "默认材料", materialSuggestion: "米白织物、浅金属", style: getProjectStyle(state) });
+  const thumbs = displaySwatches.map((swatch) => `
+    <button type="button" class="material-swatch-thumb ${swatch.source === "placeholder" ? "is-placeholder" : ""}" data-action="preview-material-swatch" data-id="${safeId}" data-swatch-id="${escapeHtml(swatch.id)}" aria-label="预览${escapeHtml(swatch.name)}材料样板">
+      <img src="${escapeHtml(swatch.image || swatch.dataUrl || createMaterialSwatchImage(swatch))}" alt="${escapeHtml(swatch.name)}" loading="lazy" />
+      <span>${escapeHtml(swatch.shortLabel || swatch.name)}</span>
+    </button>`).join("");
   return `
-    <div class="sample-board-cell">
-      <div class="sample-thumbs ${samples.length ? "" : "is-empty"}">${thumbs || "待上传材料样板"}</div>
+    <div class="material-swatch-cell">
+      <div class="material-swatch-strip">${thumbs}</div>
       <button type="button" class="mini-button no-print" data-action="upload-material-sample" data-id="${safeId}">上传样板</button>
-      <small>${samples.length ? `已上传 ${samples.length} 张` : "支持 1-3 张"}</small>
     </div>`;
+}
+
+function renderMaterialSamplesCell(samples, safeId) {
+  return renderMaterialSwatchesCell(samples.map((sample) => materialSampleToSwatch(sample, { id: safeId, category: "材料", productName: "上传样板" })), safeId);
+}
+
+
+function openMaterialSwatchPreview(item, swatchId) {
+  const swatch = buildSwatchPreviewData(item).find((entry) => entry.id === swatchId);
+  if (!swatch) return;
+  elements.materialSwatchImage.src = swatch.image || swatch.dataUrl || createMaterialSwatchImage(swatch);
+  elements.materialSwatchImage.alt = `${swatch.name}材料样板大图`;
+  elements.materialSwatchName.textContent = swatch.name || "材料样板";
+  elements.materialSwatchType.textContent = swatch.category || getMaterialTypeName(swatch.type);
+  elements.materialSwatchProduct.textContent = swatch.productName || item.productName || item.name || item.category;
+  elements.materialSwatchNote.textContent = swatch.note || "后续可通过 AI 图像识别自动补充材料用途与色彩倾向。";
+  elements.materialSwatchDialog.showModal();
 }
 
 function statusClass(status) {
@@ -2338,6 +2555,7 @@ function collectFormItem() {
     supplier: elements.supplierInput.value.trim(),
     subtotal: quantity * unitPrice,
     status: elements.statusInput.value,
+    materialSwatches: normalizeMaterialSwatches(existing.materialSwatches, { ...existing, category, productName, name: productName, materialSuggestion, priceRange: materialSuggestion }, getProjectStyle(state)),
     materialSampleImages: normalizeMaterialSampleImages(existing.materialSampleImages),
     clientNote: elements.clientNoteInput.value.trim(),
     clientVisible: elements.customerVisibleInput.checked,
@@ -2432,16 +2650,16 @@ function exportCsv() {
   renumberItems(state.items);
   const isClientReport = exportMode !== "internal";
   const headers = isClientReport
-    ? ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "预算小计", "材料样板", "客户版备注"]
-    : ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "执行单价", "供应商", "预算小计", "状态", "材料样板", "客户版备注", "是否客户可见"];
+    ? ["编号", "空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "数量", "材质建议", "预算小计", "状态"]
+    : ["编号", "空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "数量", "材质建议", "执行单价", "供应商", "预算小计", "状态", "是否客户可见"];
   const rows = state.items.filter((item) => !isClientReport || (item.clientVisible ?? item.customerVisible) !== false).map((item, index) => {
     const productImageStatus = getProductImageSourceMeta(item).description;
-    const sampleCount = normalizeMaterialSampleImages(item.materialSampleImages).length;
-    const sampleStatus = sampleCount ? `已上传 ${sampleCount} 张` : "未上传";
-    const common = [formatItemCode(index), item.space, item.category, productImageStatus, item.productName || item.name, item.size || extractSizeFromLegacySpec(item.spec), item.quantity, item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec)];
+    const swatches = buildSwatchPreviewData(item);
+    const sampleStatus = swatches.map((swatch) => swatch.name).join(" / ") || "默认样板";
+    const common = [formatItemCode(index), item.space, item.category, `${productImageStatus}：${item.productName || item.name}`, sampleStatus, item.size || extractSizeFromLegacySpec(item.spec), item.quantity, item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec)];
     return isClientReport
-      ? [...common, subtotal(item), sampleStatus, item.clientNote || customerNote(item)]
-      : [...common, item.unitPrice, item.supplier, subtotal(item), item.status, sampleStatus, item.clientNote || customerNote(item), (item.clientVisible ?? item.customerVisible) === false ? "否" : "是"];
+      ? [...common, subtotal(item), item.status]
+      : [...common, item.unitPrice, item.supplier, subtotal(item), item.status, (item.clientVisible ?? item.customerVisible) === false ? "否" : "是"];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
@@ -2621,6 +2839,7 @@ elements.tableBody.addEventListener("click", (event) => {
   if (button.dataset.action === "pick-rendering-image") return openRenderingPicker(item);
   if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
   if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
+  if (button.dataset.action === "preview-material-swatch") return openMaterialSwatchPreview(item, button.dataset.swatchId);
   if (button.dataset.action === "edit") {
     openProductDialog(item);
   }
@@ -2799,6 +3018,12 @@ elements.searchInput.addEventListener("input", (event) => {
 elements.showSuggestionsBtn.addEventListener("click", () => elements.suggestionDialog.showModal());
 elements.closeSuggestionBtn.addEventListener("click", () => elements.suggestionDialog.close());
 elements.closeRenderingPickerBtn.addEventListener("click", () => elements.renderingPickerDialog.close());
+elements.closeMaterialSwatchBtn.addEventListener("click", () => elements.materialSwatchDialog.close());
+elements.materialSwatchDialog.addEventListener("click", (event) => {
+  const rect = elements.materialSwatchDialog.getBoundingClientRect();
+  const isBackdropClick = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+  if (isBackdropClick) elements.materialSwatchDialog.close();
+});
 elements.renderingPickerDialog.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-action=\"select-rendering-image\"]");
   if (!button) return;

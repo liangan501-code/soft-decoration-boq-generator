@@ -324,7 +324,7 @@
                     <th>空间</th>
                     <th>品类</th>
                     <th>软装产品彩图</th>
-                    <th>产品名称</th>
+                    <th>材料样板贴图</th>
                     <th>常见尺寸</th>
                     <th>数量</th>
                     <th>材质建议</th>
@@ -332,9 +332,6 @@
                     <th class="customer-hidden">供应商</th>
                     <th>预算小计</th>
                     <th class="internal-only">状态</th>
-                    <th>材料样板贴图</th>
-                    <th>客户版备注</th>
-                    <th class="internal-only">是否客户可见</th>
                     <th class="actions-col internal-only">操作</th>
                   </tr>
                 </thead>
@@ -435,6 +432,25 @@
       </div>
       <p class="dialog-note">当前静态版本使用整张或区域缩略预览；后续可升级为 AI 识别具体单品并精确框选裁剪。</p>
       <div class="rendering-picker-grid" id="renderingPickerGrid" aria-label="已上传效果图 / 软装方案图列表"></div>
+    </dialog>
+
+    <dialog id="materialSwatchDialog" class="material-swatch-dialog" aria-labelledby="materialSwatchTitle">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Material Preview</p>
+          <h3 id="materialSwatchTitle">材料样板贴图</h3>
+        </div>
+        <button type="button" class="icon-button" id="closeMaterialSwatchBtn" aria-label="关闭材料样板预览">×</button>
+      </div>
+      <div class="swatch-preview-layout">
+        <img id="materialSwatchImage" class="material-swatch-large" src="" alt="材料样板大图" />
+        <dl class="swatch-preview-meta">
+          <div><dt>材料名称</dt><dd id="materialSwatchName">-</dd></div>
+          <div><dt>材料类别</dt><dd id="materialSwatchType">-</dd></div>
+          <div><dt>适用产品</dt><dd id="materialSwatchProduct">-</dd></div>
+          <div><dt>备注</dt><dd id="materialSwatchNote">-</dd></div>
+        </dl>
+      </div>
     </dialog>
 
     <dialog id="suggestionDialog" class="suggestion-dialog">
