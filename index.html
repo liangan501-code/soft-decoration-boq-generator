@@ -175,6 +175,7 @@
                 </article>
               </div>
               <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图 / 软装方案，系统需要根据图纸与空间效果生成清单。</p>
+              <p class="upload-reference-note">当前静态版本会优先使用上传的效果图 / 软装方案作为产品参考图。若需要精准识别并裁切具体沙发、灯具、地毯等单品，后续可接入 AI 图像识别接口。</p>
             </section>
 
             <section class="generator-step project-info-step" aria-labelledby="projectInfoStepTitle">
@@ -410,6 +411,18 @@
       </form>
     </dialog>
 
+
+    <dialog id="renderingPickerDialog" class="rendering-picker-dialog">
+      <div class="dialog-header">
+        <div>
+          <h3>从方案图选择产品图</h3>
+          <p>选择已上传效果图 / 软装方案，并指定第一版参考裁剪区域。</p>
+        </div>
+        <button type="button" class="icon-button" id="closeRenderingPickerBtn" aria-label="关闭">×</button>
+      </div>
+      <p class="dialog-note">当前静态版本使用整张或区域缩略预览；后续可升级为 AI 识别具体单品并精确框选裁剪。</p>
+      <div class="rendering-picker-grid" id="renderingPickerGrid" aria-label="已上传效果图 / 软装方案图列表"></div>
+    </dialog>
 
     <dialog id="suggestionDialog" class="suggestion-dialog">
       <div class="dialog-header">

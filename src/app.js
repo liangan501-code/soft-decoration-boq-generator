@@ -28,6 +28,13 @@ const IMAGE_PREVIEW_QUALITY = 0.86;
 const IMAGE_DB_NAME = "maison-boq-images-v1";
 const IMAGE_STORE_NAME = "images";
 const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，已尝试改用 IndexedDB 保存图片预览。";
+const PRODUCT_IMAGE_SOURCES = new Set(["uploaded-rendering", "manual-upload", "placeholder"]);
+const PRODUCT_IMAGE_CROPS = {
+  full: { label: "使用整张方案图", className: "crop-full" },
+  topLeft: { label: "使用左上区域", className: "crop-top-left" },
+  center: { label: "使用中间区域", className: "crop-center" },
+  bottomRight: { label: "使用右下区域", className: "crop-bottom-right" },
+};
 
 const defaultProject = () => ({
   id: createId(),
@@ -589,6 +596,9 @@ const elements = {
   customerVisibleInput: document.querySelector("#customerVisibleInput"),
   formSubtotal: document.querySelector("#formSubtotal"),
   suggestionDialog: document.querySelector("#suggestionDialog"),
+  renderingPickerDialog: document.querySelector("#renderingPickerDialog"),
+  renderingPickerGrid: document.querySelector("#renderingPickerGrid"),
+  closeRenderingPickerBtn: document.querySelector("#closeRenderingPickerBtn"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
   toast: document.querySelector("#toast"),
 };
@@ -605,7 +615,7 @@ function loadWorkspace() {
     }
   }
 
-  const project = defaultProject();
+  const project = normalizeProject(defaultProject());
   return { version: 1, activeProjectId: project.id, projects: [project] };
 }
 
@@ -684,13 +694,16 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
   const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || item.note || "待确认材质、颜色与工艺";
   const unitPrice = Number(item.unitPrice || item.price || 0);
   const quantity = Number(item.quantity || 0);
-  const productImageUploaded = Boolean(item.productImageUploaded || (item.productImage && !isPlaceholderImage(item.productImage)));
+  const inferredSource = inferProductImageSource(item);
+  const productImageUploaded = inferredSource === "manual-upload";
   return {
     id: item.id || createId(),
     code: formatItemCode(index),
     space: item.space || "未分区",
     category: item.category || "待分类",
     productImage: item.productImage || (item.productImageStorageKey ? "" : createProductPlaceholderImage(item.category || "待分类", projectStyle)),
+    productImageSource: inferredSource,
+    productImageCrop: normalizeProductImageCrop(item.productImageCrop),
     productImageUploaded,
     productImageStorageKey: item.productImageStorageKey || "",
     productImageStorage: item.productImageStorage || "localStorage",
@@ -712,6 +725,18 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
     note: item.note || item.remark || "",
     customerVisible: item.clientVisible ?? item.customerVisible ?? true,
   };
+}
+
+function inferProductImageSource(item = {}) {
+  if (PRODUCT_IMAGE_SOURCES.has(item.productImageSource)) return item.productImageSource;
+  if (item.productImageUploaded || item.productImageStorageKey || (item.productImage && !isPlaceholderImage(item.productImage))) return "manual-upload";
+  return "placeholder";
+}
+
+function normalizeProductImageCrop(crop) {
+  if (!crop) return null;
+  if (typeof crop === "string") return PRODUCT_IMAGE_CROPS[crop] ? { type: crop } : null;
+  return PRODUCT_IMAGE_CROPS[crop.type] ? { type: crop.type } : null;
 }
 
 function normalizeMaterialSampleImages(images = []) {
@@ -936,7 +961,7 @@ function saveState() {
       });
       project.items = (project.items || []).map((item) => {
         const nextItem = { ...item };
-        if (nextItem.productImage && nextItem.productImageUploaded) {
+        if (nextItem.productImage && nextItem.productImageSource === "manual-upload") {
           const storageKey = nextItem.productImageStorageKey || buildItemImageStorageKey(project.id, nextItem.id, "productImage");
           saveJobs.push(saveImageToIndexedDb(storageKey, nextItem.productImage));
           const liveItem = workspace.projects.find((entry) => entry.id === project.id)?.items?.find((entry) => entry.id === nextItem.id);
@@ -1150,7 +1175,7 @@ function buildTemplateItems(space, style, context = getGenerationContext()) {
   const profile = styleProfiles[style] || styleProfiles.奶油风;
   const budgetRatio = getBudgetRatio(context);
 
-  return sourceItems.map(([category, baseName, size, quantity, unit, priceRange, productNote]) => {
+  return sourceItems.map(([category, baseName, size, quantity, unit, priceRange, productNote], index) => {
     const adjustedRange = adjustPriceRange(priceRange, budgetRatio);
     const adjustedQuantity = adjustQuantity(quantity, context, space, category);
     const internalNote = buildInternalNote({ context, style, space, productNote, profile });
@@ -1161,8 +1186,7 @@ function buildTemplateItems(space, style, context = getGenerationContext()) {
       code: "",
       space,
       category,
-      productImage: createProductPlaceholderImage(category, style),
-      productImageUploaded: false,
+      ...buildGeneratedProductImageFields(category, style, index),
       productName,
       size,
       quantity: adjustedQuantity,
@@ -1182,6 +1206,34 @@ function buildTemplateItems(space, style, context = getGenerationContext()) {
       customerVisible: true,
     };
   });
+}
+
+function buildGeneratedProductImageFields(category, style, index = 0) {
+  const rendering = getRenderingForItem(index);
+  if (rendering) {
+    return {
+      productImage: rendering.id,
+      productImageSource: "uploaded-rendering",
+      productImageCrop: null,
+      productImageUploaded: false,
+    };
+  }
+  return {
+    productImage: createProductPlaceholderImage(category, style),
+    productImageSource: "placeholder",
+    productImageCrop: null,
+    productImageUploaded: false,
+  };
+}
+
+function getRenderingForItem(index = 0) {
+  const renderings = getAvailableRenderings();
+  return renderings.length ? renderings[index % renderings.length] : null;
+}
+
+function getAvailableRenderings() {
+  state.attachments = normalizeAttachments(state.attachments);
+  return state.attachments.renderings.filter((file) => file.id && (file.dataUrl || file.storageKey));
 }
 
 function explicitTemplateToTuple(item) {
@@ -1286,6 +1338,13 @@ function generateItemsForSpaceAndStyle(space, style) {
   return buildTemplateItems(space, style, currentGenerationContext || getGenerationContext());
 }
 
+function assignRenderingImagesToGeneratedItems(items = []) {
+  const renderings = getAvailableRenderings();
+  if (!renderings.length) return items;
+  items.forEach((item, index) => assignRenderingImageToItem(item, index, null, renderings[index % renderings.length].id));
+  return items;
+}
+
 function replaceItemsForSpaces(generatedItems, replaceSpaces) {
   const firstReplaceIndex = state.items.findIndex((item) => replaceSpaces.has(item.space));
   const existingItems = state.items.filter((item) => !replaceSpaces.has(item.space));
@@ -1334,7 +1393,7 @@ function runTemplateGeneration({ spaces, successMessage }) {
   }
   const style = elements.templateStyleInput.value;
   currentGenerationContext = getGenerationContext();
-  const generatedItems = spaces.flatMap((space) => generateItemsForSpaceAndStyle(space, style));
+  const generatedItems = assignRenderingImagesToGeneratedItems(spaces.flatMap((space) => generateItemsForSpaceAndStyle(space, style)));
   applyGeneratedItems(generatedItems, successMessage(style, generatedItems), spaces, style, spaces);
   currentGenerationContext = null;
 }
@@ -1597,6 +1656,7 @@ async function handleUploadFiles(collection, fileList) {
     saveState();
     renderUploadPreviews();
     updateGeneratorAvailability();
+    if (collection === "renderings") render();
   }
   if (failures.length) {
     showToast([...new Set(failures)].join("；"));
@@ -1696,11 +1756,20 @@ function removeUploadedImage(collection, id) {
   state.attachments = normalizeAttachments(state.attachments);
   const removed = state.attachments[collection].find((file) => file.id === id);
   state.attachments[collection] = state.attachments[collection].filter((file) => file.id !== id);
+  if (collection === "renderings") reassignItemsUsingRemovedRendering(id);
   if (removed?.storageKey) deleteImageFromIndexedDb(removed.storageKey).catch((error) => console.warn("删除 IndexedDB 图片失败", error));
   saveState();
   renderUploadPreviews();
   updateGeneratorAvailability();
+  render();
   showToast(`${UPLOAD_COLLECTIONS[collection].label}已删除`);
+}
+
+function reassignItemsUsingRemovedRendering(removedId) {
+  state.items.forEach((item, index) => {
+    if (item.productImageSource !== "uploaded-rendering" || item.productImage !== removedId) return;
+    assignRenderingImageToItem(item, index);
+  });
 }
 
 function promptItemImageUpload(item, kind) {
@@ -1715,8 +1784,11 @@ function promptItemImageUpload(item, kind) {
       const images = await Promise.all(files.map(readImageFile));
       if (kind === "product") {
         item.productImage = images[0].dataUrl;
+        item.productImageSource = "manual-upload";
+        item.productImageCrop = null;
         item.productImageUploaded = true;
-        showToast("已上传/替换软装产品彩图");
+        item.productImageStorageKey = "";
+        showToast("已上传/替换真实软装产品彩图");
       } else {
         const existing = normalizeMaterialSampleImages(item.materialSampleImages);
         item.materialSampleImages = [...existing, ...images].slice(0, 3);
@@ -1733,13 +1805,65 @@ function promptItemImageUpload(item, kind) {
 }
 
 function removeProductImage(item) {
-  if (item.productImageStorageKey) deleteImageFromIndexedDb(item.productImageStorageKey).catch((error) => console.warn("删除产品图 IndexedDB 失败", error));
-  item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
+  if (item.productImageStorageKey && item.productImageSource === "manual-upload") deleteImageFromIndexedDb(item.productImageStorageKey).catch((error) => console.warn("删除产品图 IndexedDB 失败", error));
   item.productImageUploaded = false;
   item.productImageStorageKey = "";
+  item.productImageStorage = "localStorage";
+  const restoredFromRendering = assignRenderingImageToItem(item, getItemIndex(item));
   saveState();
   render();
-  showToast("已恢复默认产品彩图占位图");
+  showToast(restoredFromRendering ? "已恢复为效果图 / 软装方案参考图" : "已恢复默认产品彩图占位图");
+}
+
+function assignRenderingImageToItem(item, index = 0, crop = null, renderingId = "") {
+  const rendering = renderingId ? getRenderingByReference(renderingId) : getRenderingForItem(index);
+  if (rendering) {
+    item.productImage = rendering.id;
+    item.productImageSource = "uploaded-rendering";
+    item.productImageCrop = normalizeProductImageCrop(crop);
+    item.productImageUploaded = false;
+    return true;
+  }
+  item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
+  item.productImageSource = "placeholder";
+  item.productImageCrop = null;
+  item.productImageUploaded = false;
+  return false;
+}
+
+function openRenderingPicker(item) {
+  const renderings = getAvailableRenderings();
+  if (!renderings.length) {
+    showToast("请先上传效果图 / 软装方案图");
+    return;
+  }
+  elements.renderingPickerGrid.innerHTML = renderings.map((file) => renderRenderingPickerCard(item, file)).join("");
+  elements.renderingPickerDialog.dataset.itemId = item.id;
+  elements.renderingPickerDialog.showModal();
+}
+
+function renderRenderingPickerCard(item, file) {
+  const safeImageId = escapeHtml(file.id);
+  const thumb = file.dataUrl || createRenderingPendingImage(item.category);
+  const cropButtons = Object.entries(PRODUCT_IMAGE_CROPS).map(([cropType, crop]) => `
+    <button type="button" class="mini-button" data-action="select-rendering-image" data-rendering-id="${safeImageId}" data-crop="${escapeHtml(cropType)}">${escapeHtml(crop.label)}</button>`).join("");
+  return `
+    <article class="rendering-picker-card">
+      <img src="${escapeHtml(thumb)}" alt="${escapeHtml(file.name)}" />
+      <strong>${escapeHtml(file.name)}</strong>
+      <span>来自效果图 / 软装方案</span>
+      <div class="rendering-crop-actions">${cropButtons}</div>
+    </article>`;
+}
+
+function selectRenderingImageForItem(itemId, renderingId, cropType) {
+  const item = state.items.find((entry) => entry.id === itemId);
+  if (!item) return;
+  assignRenderingImageToItem(item, getItemIndex(item), cropType, renderingId);
+  saveState();
+  render();
+  elements.renderingPickerDialog.close();
+  showToast("已从方案图选择产品参考图");
 }
 
 function removeMaterialSample(item, sampleId) {
@@ -1862,7 +1986,7 @@ function renderRow(item) {
   const productName = item.productName || item.name || "未命名产品";
   const size = item.size || extractSizeFromLegacySpec(item.spec) || item.spec || "按图纸复核";
   const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || "待确认材质、颜色与工艺";
-  const productImage = item.productImage || createProductPlaceholderImage(item.category, getProjectStyle(state));
+  const productImage = resolveProductImage(item);
   const materialSamples = normalizeMaterialSampleImages(item.materialSampleImages);
   const clientVisible = item.clientVisible ?? item.customerVisible ?? true;
   return `
@@ -1890,17 +2014,69 @@ function renderRow(item) {
 }
 
 function renderProductImageCell(item, productImage, safeId) {
-  const status = item.productImageUploaded ? "已上传真实产品图" : "默认风格化占位图";
+  const sourceMeta = getProductImageSourceMeta(item);
+  const cropMeta = PRODUCT_IMAGE_CROPS[item.productImageCrop?.type || "full"] || PRODUCT_IMAGE_CROPS.full;
   return `
-    <div class="product-image-cell">
-      <img class="boq-product-image" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" />
+    <div class="product-image-cell ${sourceMeta.className}">
+      <div class="product-image-card">
+        <img class="boq-product-image ${cropMeta.className}" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" />
+        <span class="product-category-badge">${escapeHtml(item.category)}</span>
+        <span class="product-source-badge">${escapeHtml(sourceMeta.label)}</span>
+      </div>
       <div class="image-actions no-print">
-        <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传/替换</button>
+        <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传 / 替换</button>
+        <button type="button" class="mini-button" data-action="pick-rendering-image" data-id="${safeId}">从方案图选择</button>
         <button type="button" class="mini-button danger" data-action="remove-product-image" data-id="${safeId}">删除</button>
       </div>
-      <small>${escapeHtml(status)}</small>
+      <small>${escapeHtml(sourceMeta.description)}${item.productImageCrop?.type ? ` · ${escapeHtml(cropMeta.label)}` : ""}</small>
     </div>`;
 }
+
+function resolveProductImage(item) {
+  if (item.productImageSource === "manual-upload" && item.productImage) return item.productImage;
+  if (item.productImageSource === "uploaded-rendering") {
+    const rendering = getRenderingByReference(item.productImage) || getRenderingForItem(getItemIndex(item));
+    if (rendering?.dataUrl) return rendering.dataUrl;
+    if (rendering?.storageKey && !rendering.dataUrl) return createRenderingPendingImage(item.category);
+  }
+  const fallback = getRenderingForItem(getItemIndex(item));
+  if (item.productImageSource !== "manual-upload" && fallback?.dataUrl) {
+    item.productImage = fallback.id;
+    item.productImageSource = "uploaded-rendering";
+    item.productImageCrop = item.productImageCrop || null;
+    return fallback.dataUrl;
+  }
+  item.productImageSource = item.productImageSource === "manual-upload" ? "manual-upload" : "placeholder";
+  return item.productImage && item.productImageSource === "placeholder" && !isPlaceholderImage(item.productImage)
+    ? item.productImage
+    : createProductPlaceholderImage(item.category, getProjectStyle(state));
+}
+
+function getRenderingByReference(reference) {
+  const renderings = getAvailableRenderings();
+  return renderings.find((file) => file.id === reference || file.dataUrl === reference) || null;
+}
+
+function getItemIndex(item) {
+  return Math.max(0, state.items.findIndex((entry) => entry.id === item.id));
+}
+
+function createRenderingPendingImage(category = "软装") {
+  const title = escapeXml(category || "软装产品");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240"><rect width="320" height="240" rx="26" fill="#f6efe2"/><text x="28" y="112" fill="#a47f40" font-family="Arial, sans-serif" font-size="16" font-weight="700">${title}</text><text x="28" y="144" fill="#6f7765" font-family="Arial, sans-serif" font-size="13" font-weight="700">效果图预览加载中</text></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function getProductImageSourceMeta(item) {
+  if (item.productImageSource === "manual-upload") {
+    return { label: "手动上传", description: "已上传真实产品图", className: "source-manual" };
+  }
+  if (item.productImageSource === "uploaded-rendering") {
+    return { label: "来自效果图 / 软装方案", description: "来自效果图 / 软装方案", className: "source-rendering" };
+  }
+  return { label: "风格占位图", description: "默认风格化占位图", className: "source-placeholder" };
+}
+
 
 function renderMaterialSamplesCell(samples, safeId) {
   const thumbs = samples.map((image) => `
@@ -1964,12 +2140,16 @@ function collectFormItem() {
   const productName = elements.nameInput.value.trim();
   const size = elements.specInput.value.trim();
   const materialSuggestion = elements.priceRangeInput.value.trim();
+  const category = elements.categoryInput.value.trim();
+  const fallbackProductImageFields = buildGeneratedProductImageFields(category, getProjectStyle(state), state.items.length);
   return {
     ...existing,
     id: elements.editingId.value || createId(),
     space: elements.spaceInput.value.trim(),
-    category: elements.categoryInput.value.trim(),
-    productImage: existing.productImage || createProductPlaceholderImage(elements.categoryInput.value.trim(), getProjectStyle(state)),
+    category,
+    productImage: existing.productImage || fallbackProductImageFields.productImage,
+    productImageSource: existing.productImageSource || fallbackProductImageFields.productImageSource,
+    productImageCrop: existing.productImageCrop || fallbackProductImageFields.productImageCrop,
     productImageUploaded: Boolean(existing.productImageUploaded),
     productName,
     size,
@@ -2075,7 +2255,7 @@ function exportCsv() {
     ? ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "预算小计", "材料样板", "客户版备注"]
     : ["编号", "空间", "品类", "产品彩图", "产品名称", "常见尺寸", "数量", "材质建议", "执行单价", "供应商", "预算小计", "状态", "材料样板", "客户版备注", "是否客户可见"];
   const rows = state.items.filter((item) => !isClientReport || (item.clientVisible ?? item.customerVisible) !== false).map((item, index) => {
-    const productImageStatus = item.productImageUploaded ? "已上传" : "默认占位图";
+    const productImageStatus = getProductImageSourceMeta(item).description;
     const sampleCount = normalizeMaterialSampleImages(item.materialSampleImages).length;
     const sampleStatus = sampleCount ? `已上传 ${sampleCount} 张` : "未上传";
     const common = [formatItemCode(index), item.space, item.category, productImageStatus, item.productName || item.name, item.size || extractSizeFromLegacySpec(item.spec), item.quantity, item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec)];
@@ -2258,6 +2438,7 @@ elements.tableBody.addEventListener("click", (event) => {
   if (!item) return;
   if (button.dataset.action === "upload-product-image") return promptItemImageUpload(item, "product");
   if (button.dataset.action === "remove-product-image") return removeProductImage(item);
+  if (button.dataset.action === "pick-rendering-image") return openRenderingPicker(item);
   if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
   if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
   if (button.dataset.action === "edit") {
@@ -2433,6 +2614,12 @@ elements.searchInput.addEventListener("input", (event) => {
 });
 elements.showSuggestionsBtn.addEventListener("click", () => elements.suggestionDialog.showModal());
 elements.closeSuggestionBtn.addEventListener("click", () => elements.suggestionDialog.close());
+elements.closeRenderingPickerBtn.addEventListener("click", () => elements.renderingPickerDialog.close());
+elements.renderingPickerDialog.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-action=\"select-rendering-image\"]");
+  if (!button) return;
+  selectRenderingImageForItem(elements.renderingPickerDialog.dataset.itemId, button.dataset.renderingId, button.dataset.crop);
+});
 
 hydrateWorkspaceFromIndexedDb().catch((error) => console.warn("IndexedDB 图片恢复失败", error));
 render();
