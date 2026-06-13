@@ -1,5 +1,18 @@
 const STORAGE_KEY = "maison-boq-state-v1";
-const LEGACY_STORAGE_KEYS = ["maison-boq-workspace-v2", "maison-boq-state", "maison-boq-project"];
+const CURRENT_DATA_VERSION = 6;
+const KNOWN_LEGACY_STORAGE_KEYS = [
+  "maison-boq-state-v1",
+  "maison-boq-state",
+  "boq-state",
+  "projects",
+  "currentProject",
+  "maison-projects",
+  "soft-decoration-boq",
+  "maison-boq-workspace-v2",
+  "maison-boq-project",
+];
+const LEGACY_KEY_PATTERN = /(boq|maison|project|soft|decor)/i;
+let detectedLegacySnapshots = [];
 function createId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -570,6 +583,10 @@ const elements = {
   importBtn: document.querySelector("#importBtn"),
   backupExportBtn: document.querySelector("#backupExportBtn"),
   backupImportBtn: document.querySelector("#backupImportBtn"),
+  legacyRecoveryBtn: document.querySelector("#legacyRecoveryBtn"),
+  legacyRecoveryDialog: document.querySelector("#legacyRecoveryDialog"),
+  closeLegacyRecoveryBtn: document.querySelector("#closeLegacyRecoveryBtn"),
+  legacyRecoveryList: document.querySelector("#legacyRecoveryList"),
   backupFileInput: document.querySelector("#backupFileInput"),
   restoreSamplesBtn: document.querySelector("#restoreSamplesBtn"),
   cleanupUnusedImagesBtn: document.querySelector("#cleanupUnusedImagesBtn"),
@@ -619,19 +636,169 @@ const elements = {
 };
 
 function loadWorkspace() {
-  const current = readStorageValue(STORAGE_KEY);
-  if (current) return normalizeWorkspace(migrateLegacyData(current) || current);
+  detectedLegacySnapshots = scanStorageSnapshots();
+  const currentSnapshot = detectedLegacySnapshots.find((snapshot) => snapshot.key === STORAGE_KEY);
+  const legacySnapshots = detectedLegacySnapshots.filter((snapshot) => snapshot.key !== STORAGE_KEY);
 
-  for (const key of LEGACY_STORAGE_KEYS) {
-    const legacy = readStorageValue(key);
-    if (legacy) {
-      const migrated = migrateLegacyData(legacy);
-      return normalizeWorkspace(migrated);
-    }
+  if (legacySnapshots.length) {
+    const baseWorkspace = currentSnapshot?.workspace && !isSampleOnlyWorkspace(currentSnapshot.workspace)
+      ? currentSnapshot.workspace
+      : { version: CURRENT_DATA_VERSION, activeProjectId: "", projects: [] };
+    const merged = mergeWorkspaces(baseWorkspace, legacySnapshots.map((snapshot) => snapshot.workspace));
+    if (merged.projects.length) return normalizeWorkspace(merged);
   }
 
+  if (currentSnapshot?.workspace?.projects?.length) return normalizeWorkspace(currentSnapshot.workspace);
+
   const project = normalizeProject(defaultProject());
-  return { version: 1, activeProjectId: project.id, projects: [project] };
+  return { version: CURRENT_DATA_VERSION, activeProjectId: project.id, projects: [project] };
+}
+
+function scanStorageSnapshots() {
+  const keys = getCandidateStorageKeys();
+  return keys.map((key) => {
+    const raw = readStorageValue(key);
+    const migrated = migrateLegacyData(raw, key);
+    if (!migrated?.projects?.length) return null;
+    const workspaceValue = normalizeWorkspace(migrated);
+    return {
+      key,
+      workspace: workspaceValue,
+      projectCount: workspaceValue.projects.length,
+      itemCount: workspaceValue.projects.reduce((sum, project) => sum + (project.items?.length || 0), 0),
+      projectNames: workspaceValue.projects.map((project) => project.name),
+    };
+  }).filter(Boolean);
+}
+
+function getCandidateStorageKeys() {
+  const keys = new Set(KNOWN_LEGACY_STORAGE_KEYS);
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key && LEGACY_KEY_PATTERN.test(key)) keys.add(key);
+    }
+  } catch (error) {
+    console.warn("扫描 localStorage 旧数据失败", error);
+  }
+  return [...keys];
+}
+
+function isSampleOnlyWorkspace(value) {
+  const projects = value?.projects || [];
+  return projects.length === 1 && /滨江私宅 240㎡/.test(projects[0]?.name || "") && !(projects[0]?.items || []).length;
+}
+
+function mergeWorkspaces(baseWorkspace, incomingWorkspaces = []) {
+  const hasBaseProjects = Array.isArray(baseWorkspace?.projects) && baseWorkspace.projects.length > 0;
+  const merged = hasBaseProjects
+    ? normalizeWorkspace(baseWorkspace)
+    : { version: CURRENT_DATA_VERSION, activeProjectId: "", projects: [] };
+  if (isSampleOnlyWorkspace(merged)) merged.projects = [];
+  incomingWorkspaces.forEach((workspaceValue) => {
+    normalizeWorkspace(workspaceValue).projects.forEach((project) => appendRecoveredProject(merged, project));
+  });
+  if (!merged.projects.length) {
+    const project = normalizeProject(defaultProject());
+    merged.projects = [project];
+  }
+  merged.activeProjectId = merged.activeProjectId && merged.projects.some((project) => project.id === merged.activeProjectId)
+    ? merged.activeProjectId
+    : merged.projects[0].id;
+  merged.version = CURRENT_DATA_VERSION;
+  return merged;
+}
+
+function appendRecoveredProject(targetWorkspace, project) {
+  const normalized = normalizeProject(project);
+  const signature = getProjectSignature(normalized);
+  if ((targetWorkspace.projects || []).some((entry) => getProjectSignature(entry) === signature)) return;
+  const existingNames = new Set((targetWorkspace.projects || []).map((entry) => entry.name));
+  const existingIds = new Set((targetWorkspace.projects || []).map((entry) => entry.id));
+  if (existingIds.has(normalized.id)) normalized.id = createId();
+  if (existingNames.has(normalized.name)) normalized.name = createRecoveredProjectName(normalized.name, existingNames);
+  targetWorkspace.projects.push(normalized);
+}
+
+function getProjectSignature(project) {
+  return [project.name, project.clientName || "", project.area || "", project.items?.length || 0, project.items?.[0]?.productName || project.items?.[0]?.name || ""].join("|");
+}
+
+function createRecoveredProjectName(name, existingNames) {
+  const base = `${name}（恢复版）`;
+  if (!existingNames.has(base)) return base;
+  let index = 2;
+  while (existingNames.has(`${base}${index}`)) index += 1;
+  return `${base}${index}`;
+}
+
+
+async function scanIndexedDbSnapshots() {
+  if (!globalThis.indexedDB?.databases) return [];
+  try {
+    const databases = await indexedDB.databases();
+    const candidates = (databases || []).filter((database) => database?.name && LEGACY_KEY_PATTERN.test(database.name));
+    const snapshots = [];
+    for (const database of candidates) {
+      const db = await openExistingIndexedDb(database.name).catch(() => null);
+      if (!db) continue;
+      const storeNames = [...db.objectStoreNames];
+      for (const storeName of storeNames) {
+        const values = await readAllFromIndexedDbStore(db, storeName).catch(() => []);
+        values.forEach((value, index) => {
+          const migrated = migrateLegacyData(value, `IndexedDB:${database.name}/${storeName}`);
+          if (!migrated?.projects?.length) return;
+          const workspaceValue = normalizeWorkspace(migrated);
+          snapshots.push({
+            key: `IndexedDB:${database.name}/${storeName}#${index + 1}`,
+            workspace: workspaceValue,
+            projectCount: workspaceValue.projects.length,
+            itemCount: workspaceValue.projects.reduce((sum, project) => sum + (project.items?.length || 0), 0),
+            projectNames: workspaceValue.projects.map((project) => project.name),
+          });
+        });
+      }
+      db.close();
+    }
+    return snapshots;
+  } catch (error) {
+    console.warn("扫描 IndexedDB 旧数据失败", error);
+    return [];
+  }
+}
+
+function openExistingIndexedDb(name) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name);
+    request.addEventListener("success", () => resolve(request.result));
+    request.addEventListener("error", () => reject(request.error || new Error("IndexedDB 打开失败")));
+    request.addEventListener("blocked", () => reject(new Error("IndexedDB 被占用")));
+  });
+}
+
+function readAllFromIndexedDbStore(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    const request = store.getAll();
+    request.addEventListener("success", () => resolve(request.result || []));
+    request.addEventListener("error", () => reject(request.error || new Error("IndexedDB 读取失败")));
+    transaction.addEventListener("abort", () => reject(transaction.error || new Error("IndexedDB 读取中断")));
+  });
+}
+
+async function recoverIndexedDbLegacyData() {
+  const snapshots = await scanIndexedDbSnapshots();
+  if (!snapshots.length) return;
+  detectedLegacySnapshots = [...detectedLegacySnapshots, ...snapshots];
+  const addedBefore = workspace.projects.length;
+  snapshots.forEach((snapshot) => mergeRecoveredWorkspace(snapshot.workspace));
+  if (workspace.projects.length > addedBefore) {
+    await migrateInlineImagesToIndexedDb();
+    saveState();
+    render();
+    showToast(`已从 IndexedDB 恢复 ${workspace.projects.length - addedBefore} 个旧项目`);
+  }
 }
 
 function readStorageValue(key) {
@@ -644,17 +811,27 @@ function readStorageValue(key) {
   }
 }
 
-function migrateLegacyData(value) {
-  if (Array.isArray(value?.projects)) return value;
-  if (Array.isArray(value?.items) || value?.projectTitle || value?.name) {
-    const project = normalizeProject(value);
-    return { version: 1, activeProjectId: project.id, projects: [project] };
-  }
+function migrateLegacyData(value, sourceKey = "旧版数据") {
+  if (!value) return null;
+  if (Array.isArray(value?.projects)) return { ...value, version: CURRENT_DATA_VERSION };
   if (Array.isArray(value)) {
-    const project = { ...defaultProject(), id: createId(), name: "旧版导入项目", items: value };
-    return { version: 1, activeProjectId: project.id, projects: [project] };
+    const project = normalizeProject({ id: createId(), name: getRecoveredProjectTitle(sourceKey), items: value });
+    return { version: CURRENT_DATA_VERSION, activeProjectId: project.id, projects: [project] };
+  }
+  if (Array.isArray(value?.items) || value?.projectTitle || value?.name || value?.currentProject) {
+    const projectSource = value.currentProject && !Array.isArray(value.items) ? value.currentProject : value;
+    const project = normalizeProject(projectSource);
+    return { version: CURRENT_DATA_VERSION, activeProjectId: project.id, projects: [project] };
+  }
+  if (Array.isArray(value?.list) || Array.isArray(value?.boqItems)) {
+    const project = normalizeProject({ ...value, items: value.list || value.boqItems });
+    return { version: CURRENT_DATA_VERSION, activeProjectId: project.id, projects: [project] };
   }
   return null;
+}
+
+function getRecoveredProjectTitle(sourceKey = "") {
+  return sourceKey === "projects" ? "旧版项目数据" : `旧版恢复项目（${sourceKey}）`;
 }
 
 function normalizeWorkspace(value) {
@@ -664,7 +841,7 @@ function normalizeWorkspace(value) {
   const activeProjectId = uniqueProjects.some((project) => project.id === value?.activeProjectId)
     ? value.activeProjectId
     : uniqueProjects[0].id;
-  return { version: 1, activeProjectId, projects: uniqueProjects };
+  return { version: CURRENT_DATA_VERSION, activeProjectId, projects: uniqueProjects };
 }
 
 function dedupeProjects(projects) {
@@ -682,32 +859,36 @@ function dedupeProjects(projects) {
 
 function normalizeProject(project = {}) {
   const fallback = defaultProject();
-  const name = project.name || project.projectTitle || fallback.name;
+  const name = project.name || project.projectName || project.projectTitle || fallback.name;
   const projectStyle = project.style || inferProjectStyle(name);
-  const items = Array.isArray(project.items) ? project.items.map((item, index) => normalizeItem(item, index, projectStyle)) : [];
+  const rawItems = project.items || project.boqItems || project.list || [];
+  const items = Array.isArray(rawItems) ? rawItems.map((item, index) => normalizeItem(item, index, projectStyle)) : [];
   const projectCategory = PROJECT_SUBTYPES[project.projectCategory] ? project.projectCategory : inferProjectCategory(project.projectType);
-  const projectSubtype = normalizeSubtype(project.projectSubtype || project.projectType, projectCategory);
+  const projectSubtype = normalizeSubtype(project.projectSubType || project.projectSubtype || project.subType || project.projectType, projectCategory);
   return {
     id: project.id || createId(),
     name,
     clientName: project.clientName || "",
     projectCategory,
     projectSubtype,
+    projectSubType: projectSubtype,
     projectType: project.projectType || `${projectSubtype}软装`,
     area: normalizeArea(project.area ?? extractArea(name)),
     style: projectStyle,
     targetBudget: Number(project.targetBudget || 0),
     remark: project.remark || project.notes || "",
-    attachments: normalizeAttachments(project.attachments),
+    floorPlans: normalizeAttachmentList(project.floorPlans || project.attachments?.floorPlans),
+    renderings: normalizeAttachmentList(project.renderings || project.attachments?.renderings),
+    attachments: normalizeAttachments(project.attachments || { floorPlans: project.floorPlans, renderings: project.renderings }),
     items,
   };
 }
 
 function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
-  const productName = item.productName || item.name || "未命名产品";
-  const size = item.size || extractSizeFromLegacySpec(item.spec) || "按图纸复核";
-  const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || item.note || "待确认材质、颜色与工艺";
-  const unitPrice = Number(item.unitPrice || item.price || 0);
+  const productName = item.productName || item.name || item.title || "未命名产品";
+  const size = item.size || item.specs || item.spec || extractSizeFromLegacySpec(item.materialDescription) || "按图纸复核";
+  const materialSuggestion = item.materialSuggestion || item.materialDescription || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec || item.specs) || item.note || "待确认材质、颜色与工艺";
+  const unitPrice = Number(item.unitPrice || item.suggestedPrice || item.price || 0);
   const quantity = Number(item.quantity || 0);
   const inferredSource = inferProductImageSource(item);
   const productImageUploaded = inferredSource === "manual-upload";
@@ -741,13 +922,13 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
     subtotal: Number(item.subtotal || quantity * unitPrice),
     status: item.status || "待确认",
     materialSwatches,
-    materialSampleImages: normalizeMaterialSampleImages(item.materialSampleImages),
-    clientNote: item.clientNote || item.customerNote || "",
+    materialSampleImages: normalizeMaterialSampleImages(item.materialSampleImages || item.materialSwatchImages || item.sampleImages),
+    clientNote: item.clientNote || item.customerNote || item.internalNote || "",
     clientVisible: item.clientVisible ?? item.customerVisible ?? true,
     name: productName,
     spec: size,
     priceRange: materialSuggestion,
-    note: item.note || item.remark || "",
+    note: item.note || item.internalNote || item.remark || "",
     customerVisible: item.clientVisible ?? item.customerVisible ?? true,
   };
 }
@@ -1009,20 +1190,23 @@ function getActiveProject() {
 
 function createPersistedWorkspace() {
   return {
-    version: 1,
+    version: CURRENT_DATA_VERSION,
     activeProjectId: workspace.activeProjectId,
     projects: workspace.projects.map((project) => ({
       id: project.id,
       name: project.name,
       clientName: project.clientName || "",
       projectCategory: project.projectCategory || "家装",
-      projectSubtype: project.projectSubtype || "私宅",
+      projectSubtype: project.projectSubtype || project.projectSubType || "私宅",
+      projectSubType: project.projectSubType || project.projectSubtype || "私宅",
       projectType: project.projectType || project.projectSubtype || "",
       area: normalizeArea(project.area),
       style: project.style || "待定风格",
       targetBudget: Number(project.targetBudget || 0),
       remark: project.remark || "",
-      attachments: createPersistedAttachments(project.attachments),
+      floorPlans: createPersistedAttachments(project.attachments || { floorPlans: project.floorPlans, renderings: project.renderings }).floorPlans,
+      renderings: createPersistedAttachments(project.attachments || { floorPlans: project.floorPlans, renderings: project.renderings }).renderings,
+      attachments: createPersistedAttachments(project.attachments || { floorPlans: project.floorPlans, renderings: project.renderings }),
       items: project.items.map((item, index) => createPersistedItem(item, index, project.style)),
     })),
   };
@@ -1117,7 +1301,7 @@ async function deleteAllUploadedImages() {
 }
 
 async function createBackupWorkspaceWithImages() {
-  const backup = createPersistedWorkspace();
+  const backup = { ...createPersistedWorkspace(), exportedAt: new Date().toISOString(), imageDatabase: IMAGE_DB_NAME };
   await Promise.all(backup.projects.flatMap((project) => [
     ...Object.keys(UPLOAD_COLLECTIONS).flatMap((collection) => (project.attachments?.[collection] || []).map(async (file) => {
       if (file.storageKey) file.dataUrl = await readImageFromIndexedDb(file.storageKey).catch(() => "");
@@ -2363,7 +2547,7 @@ function renderRow(item) {
   const safeId = item.id.replaceAll('"', "&quot;");
   const code = getItemCode(item);
   item.code = code;
-  const productName = item.productName || item.name || "未命名产品";
+  const productName = item.productName || item.name || item.title || "未命名产品";
   const size = item.size || extractSizeFromLegacySpec(item.spec) || item.spec || "按图纸复核";
   const materialSuggestion = item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec) || "待确认材质、颜色与工艺";
   const productImage = resolveProductImage(item);
@@ -2582,6 +2766,105 @@ function importSamples() {
   showToast(`已导入 ${imported.length} 条示例清单数据`);
 }
 
+
+function mergeRecoveredWorkspace(recoveredWorkspace) {
+  const beforeCount = workspace.projects.length;
+  mergeWorkspaces({ ...workspace, projects: workspace.projects }, [recoveredWorkspace]).projects.forEach((project) => {
+    if (!workspace.projects.some((entry) => getProjectSignature(entry) === getProjectSignature(project))) {
+      appendRecoveredProject(workspace, project);
+    }
+  });
+  workspace.version = CURRENT_DATA_VERSION;
+  if (!workspace.activeProjectId || !workspace.projects.some((project) => project.id === workspace.activeProjectId)) {
+    workspace.activeProjectId = workspace.projects[0]?.id || "";
+  }
+  state = getActiveProject();
+  saveState();
+  render();
+  return workspace.projects.length - beforeCount;
+}
+
+async function openLegacyRecoveryCenter() {
+  detectedLegacySnapshots = [...scanStorageSnapshots(), ...(await scanIndexedDbSnapshots())];
+  renderLegacyRecoveryCenter();
+  elements.legacyRecoveryDialog?.showModal();
+}
+
+function renderLegacyRecoveryCenter() {
+  if (!elements.legacyRecoveryList) return;
+  const legacySnapshots = detectedLegacySnapshots.filter((snapshot) => snapshot.key !== STORAGE_KEY);
+  if (!legacySnapshots.length) {
+    elements.legacyRecoveryList.innerHTML = `<div class="legacy-recovery-card"><h4>未检测到旧版本数据</h4><p>已扫描已知 key 和包含 boq、maison、project、soft、decor 的 localStorage key。</p></div>`;
+    return;
+  }
+  elements.legacyRecoveryList.innerHTML = legacySnapshots.map((snapshot, index) => `
+    <article class="legacy-recovery-card" data-legacy-index="${index}">
+      <h4>${escapeHtml(snapshot.key)}</h4>
+      <p>项目数量：${snapshot.projectCount} · 清单数量：${snapshot.itemCount}</p>
+      <ul>${snapshot.workspace.projects.map((project) => `<li>${escapeHtml(project.name)}：${project.items?.length || 0} 项清单</li>`).join("")}</ul>
+      <div class="legacy-recovery-actions">
+        <button class="mini-button" type="button" data-legacy-action="merge" data-key="${escapeHtml(snapshot.key)}">合并旧项目</button>
+        <button class="mini-button" type="button" data-legacy-action="restore" data-key="${escapeHtml(snapshot.key)}">恢复 / 覆盖当前</button>
+        <button class="mini-button danger" type="button" data-legacy-action="skip" data-key="${escapeHtml(snapshot.key)}">跳过</button>
+      </div>
+    </article>`).join("");
+}
+
+async function handleLegacyRecoveryAction(event) {
+  const button = event.target.closest("[data-legacy-action]");
+  if (!button) return;
+  const snapshot = detectedLegacySnapshots.find((entry) => entry.key === button.dataset.key);
+  if (!snapshot) return;
+  if (button.dataset.legacyAction === "skip") {
+    button.closest(".legacy-recovery-card")?.remove();
+    showToast(`已跳过 ${snapshot.key}`);
+    return;
+  }
+  if (button.dataset.legacyAction === "restore") {
+    if (!window.confirm("恢复会覆盖当前项目列表。该操作可能覆盖当前项目，请先导出备份。确认继续？")) return;
+    workspace.version = CURRENT_DATA_VERSION;
+    workspace.activeProjectId = snapshot.workspace.activeProjectId;
+    workspace.projects = snapshot.workspace.projects.map(normalizeProject);
+    state = getActiveProject();
+  } else {
+    const added = mergeRecoveredWorkspace(snapshot.workspace);
+    showToast(added ? `已合并 ${added} 个旧项目` : "旧项目已存在，无需重复合并");
+  }
+  await migrateInlineImagesToIndexedDb();
+  saveState();
+  render();
+  renderLegacyRecoveryCenter();
+}
+
+async function migrateInlineImagesToIndexedDb() {
+  const jobs = [];
+  workspace.projects.forEach((project) => {
+    project.attachments = normalizeAttachments(project.attachments || { floorPlans: project.floorPlans, renderings: project.renderings });
+    Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
+      (project.attachments[collection] || []).forEach((file) => {
+        if (!file.dataUrl || file.storageKey) return;
+        file.storageKey = buildImageStorageKey(project.id, collection, file.id);
+        file.storage = "indexedDB";
+        jobs.push(saveImageToIndexedDb(file.storageKey, file.dataUrl).then(() => { file.dataUrl = ""; }).catch(() => {}));
+      });
+    });
+    (project.items || []).forEach((item) => {
+      if (item.productImage && item.productImageSource === "manual-upload" && !item.productImageStorageKey) {
+        item.productImageStorageKey = buildItemImageStorageKey(project.id, item.id, "productImage");
+        item.productImageStorage = "indexedDB";
+        jobs.push(saveImageToIndexedDb(item.productImageStorageKey, item.productImage).then(() => { item.productImage = ""; }).catch(() => {}));
+      }
+      item.materialSampleImages = normalizeMaterialSampleImages(item.materialSampleImages).map((image) => {
+        if (!image.dataUrl || image.storageKey) return image;
+        const storageKey = buildItemImageStorageKey(project.id, item.id, "materialSampleImages", image.id);
+        jobs.push(saveImageToIndexedDb(storageKey, image.dataUrl).then(() => { image.dataUrl = ""; }).catch(() => {}));
+        return { ...image, storageKey, storage: "indexedDB" };
+      });
+    });
+  });
+  await Promise.allSettled(jobs);
+}
+
 function downloadJson(filename, data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
   const link = document.createElement("a");
@@ -2606,17 +2889,22 @@ function importBackupJson(file) {
     try {
       const parsed = JSON.parse(String(reader.result || "{}"));
       const nextWorkspace = normalizeWorkspace(migrateLegacyData(parsed) || parsed);
-      if (!window.confirm(`确认导入备份？将替换当前浏览器中的 ${workspace.projects.length} 个项目。建议先导出备份。`)) return;
-      workspace.version = 1;
-      workspace.activeProjectId = nextWorkspace.activeProjectId;
-      workspace.projects = nextWorkspace.projects;
+      const shouldMerge = window.confirm(`导入备份默认建议使用“合并”，避免误删当前 ${workspace.projects.length} 个项目。\n\n点击“确定”=合并到当前项目列表；点击“取消”后可选择覆盖或放弃。`);
+      if (shouldMerge) {
+        mergeRecoveredWorkspace(nextWorkspace);
+      } else {
+        if (!window.confirm("确认覆盖当前所有项目？该操作会替换当前数据，建议先导出备份。")) return;
+        workspace.version = CURRENT_DATA_VERSION;
+        workspace.activeProjectId = nextWorkspace.activeProjectId;
+        workspace.projects = nextWorkspace.projects;
+      }
       state = getActiveProject();
       await persistImportedImagesFromBackup();
       pendingOnly = false;
       query = "";
       saveState();
       render();
-      showToast(`已导入 ${workspace.projects.length} 个项目备份`);
+      showToast(`已导入备份，当前共 ${workspace.projects.length} 个项目`);
     } catch (error) {
       console.warn("导入备份失败", error);
       showToast(error.message || "备份 JSON 格式不正确，导入失败");
@@ -2628,12 +2916,12 @@ function importBackupJson(file) {
 }
 
 function restoreSampleData() {
-  const firstConfirm = window.confirm("恢复示例数据会覆盖当前所有项目。是否已先导出备份 JSON？");
+  const firstConfirm = window.confirm("该操作可能覆盖当前项目，请先导出备份。是否继续恢复示例数据？");
   if (!firstConfirm) return;
   const secondConfirm = window.confirm("请再次确认：这会用示例项目替换当前 localStorage 数据，真实项目将不再显示。");
   if (!secondConfirm) return;
   const project = defaultProject();
-  workspace.version = 1;
+  workspace.version = CURRENT_DATA_VERSION;
   workspace.activeProjectId = project.id;
   workspace.projects = [project];
   state = project;
@@ -2984,6 +3272,9 @@ elements.exportModeInput.addEventListener("change", (event) => {
 elements.importBtn.addEventListener("click", importSamples);
 elements.backupExportBtn.addEventListener("click", exportBackupJson);
 elements.backupImportBtn.addEventListener("click", () => elements.backupFileInput.click());
+elements.legacyRecoveryBtn?.addEventListener("click", openLegacyRecoveryCenter);
+elements.closeLegacyRecoveryBtn?.addEventListener("click", () => elements.legacyRecoveryDialog.close());
+elements.legacyRecoveryList?.addEventListener("click", handleLegacyRecoveryAction);
 elements.backupFileInput.addEventListener("change", (event) => importBackupJson(event.target.files?.[0]));
 elements.restoreSamplesBtn.addEventListener("click", restoreSampleData);
 elements.cleanupUnusedImagesBtn?.addEventListener("click", cleanupUnusedImages);
@@ -3030,5 +3321,9 @@ elements.renderingPickerDialog.addEventListener("click", (event) => {
   selectRenderingImageForItem(elements.renderingPickerDialog.dataset.itemId, button.dataset.renderingId, button.dataset.crop);
 });
 
-hydrateWorkspaceFromIndexedDb().catch((error) => console.warn("IndexedDB 图片恢复失败", error));
+migrateInlineImagesToIndexedDb()
+  .then(() => saveState())
+  .then(() => recoverIndexedDbLegacyData())
+  .then(() => hydrateWorkspaceFromIndexedDb())
+  .catch((error) => console.warn("IndexedDB 图片恢复失败", error));
 render();
