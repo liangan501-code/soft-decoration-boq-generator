@@ -318,22 +318,37 @@
               </div>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="boq-table">
+                <colgroup>
+                  <col class="col-code" />
+                  <col class="col-space" />
+                  <col class="col-category" />
+                  <col class="col-product-image" />
+                  <col class="col-sample-board" />
+                  <col class="col-size" />
+                  <col class="col-quantity" />
+                  <col class="col-material" />
+                  <col class="col-unit-price customer-hidden" />
+                  <col class="col-supplier customer-hidden" />
+                  <col class="col-subtotal" />
+                  <col class="col-status internal-only" />
+                  <col class="col-actions internal-only" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>编号</th>
-                    <th>空间</th>
-                    <th>品类</th>
-                    <th>软装产品彩图</th>
-                    <th>材料样板贴图</th>
-                    <th>常见尺寸</th>
-                    <th>数量</th>
-                    <th>材质建议</th>
-                    <th class="customer-hidden">执行单价</th>
-                    <th class="customer-hidden">供应商</th>
-                    <th>预算小计</th>
-                    <th class="internal-only">状态</th>
-                    <th class="actions-col internal-only">操作</th>
+                    <th scope="col"><span class="th-inner">编号</span></th>
+                    <th scope="col"><span class="th-inner">空间</span></th>
+                    <th scope="col"><span class="th-inner">品类</span></th>
+                    <th scope="col"><span class="th-inner">软装产品彩图</span></th>
+                    <th scope="col"><span class="th-inner">材料样板贴图</span></th>
+                    <th scope="col"><span class="th-inner">常见尺寸</span></th>
+                    <th scope="col"><span class="th-inner">数量</span></th>
+                    <th scope="col"><span class="th-inner">材质建议</span></th>
+                    <th scope="col" class="customer-hidden"><span class="th-inner">执行单价</span></th>
+                    <th scope="col" class="customer-hidden"><span class="th-inner">供应商</span></th>
+                    <th scope="col"><span class="th-inner">预算小计</span></th>
+                    <th scope="col" class="internal-only"><span class="th-inner">状态</span></th>
+                    <th scope="col" class="actions-col internal-only"><span class="th-inner">操作</span></th>
                   </tr>
                 </thead>
                 <tbody id="boqTableBody"></tbody>
