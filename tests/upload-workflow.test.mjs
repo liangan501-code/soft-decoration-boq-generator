@@ -56,6 +56,7 @@ test("product image cards render only the image and actions without labels", () 
   const cellSource = app.slice(cellStart, cellEnd);
 
   assert.match(cellSource, /<img class="boq-product-image/);
+  assert.match(cellSource, /data-action="preview-product-image"/);
   assert.match(cellSource, /data-action="upload-product-image"/);
   assert.match(cellSource, /data-action="pick-rendering-image"/);
   assert.match(cellSource, /data-action="remove-product-image"/);
@@ -73,4 +74,31 @@ test("product image placeholders and pending rendering fallbacks contain no visi
 
   assert.doesNotMatch(placeholderSource, /<text|BOQ IMAGE|\$\{title\}/);
   assert.doesNotMatch(pendingSource, /效果图预览加载中|<text|\$\{title\}/);
+});
+
+
+test("product image resolution never displays whole scene renderings directly", () => {
+  const resolverStart = app.indexOf("function resolveProductImage");
+  const resolverEnd = app.indexOf("function getRenderingByReference", resolverStart);
+  const resolverSource = app.slice(resolverStart, resolverEnd);
+  const generatorStart = app.indexOf("function buildGeneratedProductImageFields");
+  const generatorEnd = app.indexOf("function getRenderingForItem", generatorStart);
+  const generatorSource = app.slice(generatorStart, generatorEnd);
+
+  assert.match(resolverSource, /manual-upload/);
+  assert.match(resolverSource, /createIsolatedProductImageFromRendering/);
+  assert.doesNotMatch(resolverSource, /return rendering\.dataUrl/);
+  assert.doesNotMatch(resolverSource, /fallback\?\.dataUrl/);
+  assert.match(generatorSource, /productImageSource: "uploaded-rendering"/);
+});
+
+test("product image lightbox supports open, close and zoom controls", () => {
+  assert.match(html, /id="productImageLightbox"/);
+  assert.match(html, /id="productZoomOutBtn"/);
+  assert.match(html, /id="productZoomResetBtn"/);
+  assert.match(html, /id="productZoomInBtn"/);
+  assert.match(app, /function openProductImageLightbox/);
+  assert.match(app, /function setProductLightboxZoom/);
+  assert.match(app, /PRODUCT_LIGHTBOX_MAX_ZOOM/);
+  assert.match(app, /event\.deltaY/);
 });
