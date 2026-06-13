@@ -3,6 +3,7 @@ const CURRENT_DATA_VERSION = 6;
 const KNOWN_LEGACY_STORAGE_KEYS = [
   "maison-boq-state-v1",
   "maison-boq-state",
+  "maison-boq-state-v6",
   "boq-state",
   "projects",
   "currentProject",
@@ -525,7 +526,14 @@ const deliveryModes = {
   },
 };
 
-const workspace = loadWorkspace();
+let workspace;
+try {
+  workspace = loadWorkspace();
+} catch (error) {
+  console.error("项目数据迁移失败，已进入安全恢复模式", error);
+  workspace = createSafeRecoveryWorkspace();
+  window.__maisonStartupError = error;
+}
 let state = getActiveProject();
 let clientMode = false;
 let exportMode = "client";
@@ -533,7 +541,7 @@ let pendingOnly = false;
 let query = "";
 let activeLibraryCard = null;
 let currentGenerationContext = null;
-saveState();
+if (!window.__maisonStartupError) saveState();
 
 const elements = {
   projectTitle: document.querySelector("#projectTitle"),
@@ -635,6 +643,89 @@ const elements = {
   toast: document.querySelector("#toast"),
 };
 
+function safeAddEventListener(target, eventName, handler, options) {
+  if (!target?.addEventListener) return false;
+  target.addEventListener(eventName, (event) => {
+    try {
+      handler(event);
+    } catch (error) {
+      console.error(`按钮事件执行失败: ${eventName}`, error);
+      safeShowToast("操作执行失败，请先导出备份并刷新页面重试");
+    }
+  }, options);
+  return true;
+}
+
+function safeClick(element, handler) {
+  return safeAddEventListener(element, "click", handler);
+}
+
+function runWhenDomReady(callback) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", callback, { once: true });
+    return;
+  }
+  callback();
+}
+
+function createSafeRecoveryWorkspace() {
+  const snapshots = scanStorageSnapshots();
+  detectedLegacySnapshots = snapshots;
+  const recovered = snapshots.flatMap((snapshot) => snapshot.workspace?.projects || []);
+  if (recovered.length) {
+    const projects = dedupeProjects(recovered.map((project) => normalizeProject(project)));
+    return { version: CURRENT_DATA_VERSION, activeProjectId: projects[0].id, projects };
+  }
+  const project = normalizeProject({ ...defaultProject(), name: "安全恢复空项目", items: [] });
+  return { version: CURRENT_DATA_VERSION, activeProjectId: project.id, projects: [project] };
+}
+
+function enterSafeRecoveryMode(error) {
+  const projectCount = detectedLegacySnapshots.reduce((sum, snapshot) => sum + (snapshot.projectCount || 0), 0);
+  const itemCount = detectedLegacySnapshots.reduce((sum, snapshot) => sum + (snapshot.itemCount || 0), 0);
+  const banner = document.createElement("section");
+  banner.className = "safe-recovery-mode panel";
+  banner.innerHTML = `
+    <div>
+      <p class="eyebrow">安全恢复模式</p>
+      <h3>检测到旧数据</h3>
+      <p>新版数据迁移未能完全执行，原始 localStorage key 已保留，您可以先恢复或导出旧数据。</p>
+      <p>可恢复的项目数量：<strong>${projectCount}</strong> · 可恢复的清单数量：<strong>${itemCount}</strong></p>
+      ${error ? `<p class="safe-recovery-error">错误信息：${escapeHtml(error.message || String(error))}</p>` : ""}
+    </div>
+    <div class="safe-recovery-actions">
+      <button class="primary-button" type="button" data-safe-recovery-action="restore">恢复旧数据</button>
+      <button class="ghost-button" type="button" data-safe-recovery-action="export">导出旧数据备份</button>
+      <button class="ghost-button" type="button" data-safe-recovery-action="continue">继续使用空项目</button>
+    </div>
+  `;
+  const main = document.querySelector("main") || document.body;
+  main.prepend(banner);
+  safeAddEventListener(banner, "click", (event) => {
+    const action = event.target.closest("[data-safe-recovery-action]")?.dataset.safeRecoveryAction;
+    if (!action) return;
+    if (action === "restore") {
+      detectedLegacySnapshots.forEach((snapshot) => mergeRecoveredWorkspace(snapshot.workspace));
+      saveState();
+      render();
+      safeShowToast(`已恢复 ${projectCount} 个旧项目`);
+      banner.remove();
+    }
+    if (action === "export") exportLegacySnapshotsBackup();
+    if (action === "continue") banner.remove();
+  });
+}
+
+function exportLegacySnapshotsBackup() {
+  const payload = { exportedAt: new Date().toISOString(), source: "safe-recovery-mode", snapshots: detectedLegacySnapshots };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `maison-boq-legacy-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
 function loadWorkspace() {
   detectedLegacySnapshots = scanStorageSnapshots();
   const currentSnapshot = detectedLegacySnapshots.find((snapshot) => snapshot.key === STORAGE_KEY);
@@ -657,17 +748,22 @@ function loadWorkspace() {
 function scanStorageSnapshots() {
   const keys = getCandidateStorageKeys();
   return keys.map((key) => {
-    const raw = readStorageValue(key);
-    const migrated = migrateLegacyData(raw, key);
-    if (!migrated?.projects?.length) return null;
-    const workspaceValue = normalizeWorkspace(migrated);
-    return {
-      key,
-      workspace: workspaceValue,
-      projectCount: workspaceValue.projects.length,
-      itemCount: workspaceValue.projects.reduce((sum, project) => sum + (project.items?.length || 0), 0),
-      projectNames: workspaceValue.projects.map((project) => project.name),
-    };
+    try {
+      const raw = readStorageValue(key);
+      const migrated = migrateLegacyData(raw, key);
+      if (!migrated?.projects?.length) return null;
+      const workspaceValue = normalizeWorkspace(migrated);
+      return {
+        key,
+        workspace: workspaceValue,
+        projectCount: workspaceValue.projects.length,
+        itemCount: workspaceValue.projects.reduce((sum, project) => sum + (project.items?.length || 0), 0),
+        projectNames: workspaceValue.projects.map((project) => project.name),
+      };
+    } catch (error) {
+      console.warn(`迁移旧数据失败，已保留原始 key: ${key}`, error);
+      return null;
+    }
   }).filter(Boolean);
 }
 
@@ -686,7 +782,7 @@ function getCandidateStorageKeys() {
 
 function isSampleOnlyWorkspace(value) {
   const projects = value?.projects || [];
-  return projects.length === 1 && /滨江私宅 240㎡/.test(projects[0]?.name || "") && !(projects[0]?.items || []).length;
+  return projects.length === 1 && /滨江私宅 240㎡/.test(projects[0]?.name || "");
 }
 
 function mergeWorkspaces(baseWorkspace, incomingWorkspaces = []) {
@@ -900,7 +996,7 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
     materialSuggestion,
     priceRange: materialSuggestion,
   };
-  const materialSwatches = normalizeMaterialSwatches(item.materialSwatches, normalizedBase, projectStyle);
+  const materialSwatches = normalizeMaterialSwatches(item.materialSwatches || item.materialSampleImages || item.materialSwatchImages || item.materialSwatchesImages, normalizedBase, projectStyle);
   return {
     id: item.id || createId(),
     code: formatItemCode(index),
@@ -2481,6 +2577,7 @@ function getVisibleItems() {
 }
 
 function render() {
+  if (!elements.tableBody || !elements.projectTitle) return;
   const visibleItems = getVisibleItems();
   const area = getProjectArea(state);
   const style = getProjectStyle(state);
@@ -2511,8 +2608,8 @@ function render() {
 
 function renderProjectSwitcher() {
   const cards = workspace.projects.map(renderProjectCard).join("");
-  elements.projectDropdownList.innerHTML = cards;
-  elements.sidebarProjectList.innerHTML = cards;
+  if (elements.projectDropdownList) elements.projectDropdownList.innerHTML = cards;
+  if (elements.sidebarProjectList) elements.sidebarProjectList.innerHTML = cards;
 }
 
 function renderProjectCard(project) {
@@ -3089,241 +3186,235 @@ function toggleProjectMenu() {
   }
 }
 
-elements.tableBody.addEventListener("input", (event) => {
-  const input = event.target.closest("input[data-action]");
-  if (!input) return;
-  const item = state.items.find((entry) => entry.id === input.dataset.id);
-  if (!item) return;
-  item[input.dataset.action] = parseInlineAmount(input.value);
-  updateInlineRowBudget(input, item);
+function setupEventBindings() {
+  if (elements.tableBody) {
+    elements.tableBody.addEventListener("input", (event) => {
+      const input = event.target.closest("input[data-action]");
+      if (!input) return;
+      const item = state.items.find((entry) => entry.id === input.dataset.id);
+      if (!item) return;
+      item[input.dataset.action] = parseInlineAmount(input.value);
+      updateInlineRowBudget(input, item);
 });
 
-elements.tableBody.addEventListener("change", (event) => {
-  const input = event.target.closest("input[data-action]");
-  if (!input) return;
-  flushInlineEditSave();
+    elements.tableBody.addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-action]");
+      if (input) flushInlineEditSave();
 });
 
-elements.tableBody.addEventListener("focusout", (event) => {
-  const input = event.target.closest("input[data-action]");
-  if (!input) return;
-  flushInlineEditSave();
+    elements.tableBody.addEventListener("focusout", (event) => {
+      const input = event.target.closest("input[data-action]");
+      if (input) flushInlineEditSave();
 });
 
-elements.tableBody.addEventListener("keydown", (event) => {
-  const input = event.target.closest("input[data-action]");
-  if (!input || event.key !== "Enter") return;
-  event.preventDefault();
-  input.blur();
+    elements.tableBody.addEventListener("keydown", (event) => {
+      const input = event.target.closest("input[data-action]");
+      if (!input || event.key !== "Enter") return;
+      event.preventDefault();
+      input.blur();
 });
-
-elements.tableBody.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-action]");
-  if (!button) return;
-  const item = state.items.find((entry) => entry.id === button.dataset.id);
-  if (!item) return;
-  if (button.dataset.action === "upload-product-image") return promptItemImageUpload(item, "product");
-  if (button.dataset.action === "remove-product-image") return removeProductImage(item);
-  if (button.dataset.action === "pick-rendering-image") return openRenderingPicker(item);
-  if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
-  if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
-  if (button.dataset.action === "preview-material-swatch") return openMaterialSwatchPreview(item, button.dataset.swatchId);
-  if (button.dataset.action === "edit") {
-    openProductDialog(item);
   }
-  if (button.dataset.action === "delete" && window.confirm(`确认删除“${item.name}”？`)) {
-    state.items = renumberItems(state.items.filter((entry) => entry.id !== item.id));
+
+  safeAddEventListener(elements.tableBody, "click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    const item = state.items.find((entry) => entry.id === button.dataset.id);
+    if (!item) return;
+    if (button.dataset.action === "upload-product-image") return promptItemImageUpload(item, "product");
+    if (button.dataset.action === "remove-product-image") return removeProductImage(item);
+    if (button.dataset.action === "pick-rendering-image") return openRenderingPicker(item);
+    if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
+    if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
+    if (button.dataset.action === "preview-material-swatch") return openMaterialSwatchPreview(item, button.dataset.swatchId);
+    if (button.dataset.action === "edit") openProductDialog(item);
+    if (button.dataset.action === "delete" && window.confirm(`确认删除“${item.name}”？`)) {
+      state.items = renumberItems(state.items.filter((entry) => entry.id !== item.id));
+      saveState();
+      render();
+      showToast("已删除产品");
+    }
+  });
+
+  safeAddEventListener(elements.productForm, "submit", (event) => {
+    event.preventDefault();
+    const item = collectFormItem();
+    const existingIndex = state.items.findIndex((entry) => entry.id === item.id);
+    if (existingIndex >= 0) {
+      state.items[existingIndex] = item;
+      showToast("已更新产品");
+    } else {
+      state.items.push(item);
+      showToast("已新增产品");
+    }
+    renumberItems(state.items);
     saveState();
     render();
-    showToast("已删除产品");
-  }
-});
-
-elements.productForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const item = collectFormItem();
-  const existingIndex = state.items.findIndex((entry) => entry.id === item.id);
-  if (existingIndex >= 0) {
-    state.items[existingIndex] = item;
-    showToast("已更新产品");
-  } else {
-    state.items.push(item);
-    showToast("已新增产品");
-  }
-  renumberItems(state.items);
-  saveState();
-  render();
-  elements.productDialog.close();
-});
-
-[elements.quantityInput, elements.unitPriceInput].forEach((input) => input.addEventListener("input", updateFormSubtotal));
-elements.closeDialogBtn.addEventListener("click", () => elements.productDialog.close());
-elements.cancelDialogBtn.addEventListener("click", () => elements.productDialog.close());
-elements.addProductBtn.addEventListener("click", () => openProductDialog());
-
-elements.floorPlanUploadBtn.addEventListener("click", () => elements.floorPlanInput.click());
-elements.renderingUploadBtn.addEventListener("click", () => elements.renderingInput.click());
-document.querySelectorAll("[data-upload-trigger]").forEach((trigger) => {
-  trigger.addEventListener("click", () => {
-    const collection = trigger.dataset.uploadTrigger;
-    (collection === "floorPlans" ? elements.floorPlanInput : elements.renderingInput).click();
+    elements.productDialog?.close();
   });
-  ["dragenter", "dragover"].forEach((eventName) => {
-    trigger.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      trigger.classList.add("is-dragover");
+
+  [elements.quantityInput, elements.unitPriceInput].forEach((input) => safeAddEventListener(input, "input", updateFormSubtotal));
+  safeClick(elements.closeDialogBtn, () => elements.productDialog?.close());
+  safeClick(elements.cancelDialogBtn, () => elements.productDialog?.close());
+  safeClick(elements.addProductBtn, () => openProductDialog());
+
+  safeClick(elements.floorPlanUploadBtn, () => elements.floorPlanInput?.click());
+  safeClick(elements.renderingUploadBtn, () => elements.renderingInput?.click());
+  document.querySelectorAll("[data-upload-trigger]").forEach((trigger) => {
+    safeClick(trigger, () => {
+      const collection = trigger.dataset.uploadTrigger;
+      (collection === "floorPlans" ? elements.floorPlanInput : elements.renderingInput)?.click();
+    });
+    ["dragenter", "dragover"].forEach((eventName) => {
+      safeAddEventListener(trigger, eventName, (event) => {
+        event.preventDefault();
+        trigger.classList.add("is-dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((eventName) => {
+      safeAddEventListener(trigger, eventName, (event) => {
+        event.preventDefault();
+        trigger.classList.remove("is-dragover");
+      });
+    });
+    trigger.addEventListener("drop", (event) => handleUploadFiles(trigger.dataset.uploadTrigger, event.dataTransfer?.files));
+  });
+  safeAddEventListener(elements.floorPlanInput, "change", (event) => {
+    handleUploadFiles("floorPlans", event.target.files);
+    event.target.value = "";
+  });
+  safeAddEventListener(elements.renderingInput, "change", (event) => {
+    handleUploadFiles("renderings", event.target.files);
+    event.target.value = "";
+  });
+  safeAddEventListener(document.querySelector("#templateBuilder"), "click", (event) => {
+    const removeButton = event.target.closest("[data-upload-remove]");
+    if (removeButton) removeUploadedImage(removeButton.dataset.uploadRemove, removeButton.dataset.uploadId);
+  });
+  [elements.projectNameInput, elements.clientNameInput, elements.projectAreaInput, elements.targetBudgetInput, elements.projectRemarkInput].forEach((input) => {
+    safeAddEventListener(input, "change", () => {
+      syncProjectInfoFromForm();
+      render();
     });
   });
-  ["dragleave", "drop"].forEach((eventName) => {
-    trigger.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      trigger.classList.remove("is-dragover");
-    });
-  });
-  trigger.addEventListener("drop", (event) => {
-    handleUploadFiles(trigger.dataset.uploadTrigger, event.dataTransfer?.files);
-  });
-});
-elements.floorPlanInput.addEventListener("change", (event) => {
-  handleUploadFiles("floorPlans", event.target.files);
-  event.target.value = "";
-});
-elements.renderingInput.addEventListener("change", (event) => {
-  handleUploadFiles("renderings", event.target.files);
-  event.target.value = "";
-});
-document.querySelector("#templateBuilder").addEventListener("click", (event) => {
-  const removeButton = event.target.closest("[data-upload-remove]");
-  if (removeButton) removeUploadedImage(removeButton.dataset.uploadRemove, removeButton.dataset.uploadId);
-});
-[elements.projectNameInput, elements.clientNameInput, elements.projectAreaInput, elements.targetBudgetInput, elements.projectRemarkInput].forEach((input) => {
-  input.addEventListener("change", () => {
+  safeAddEventListener(elements.projectCategoryInput, "change", () => {
+    renderSubtypeOptions();
     syncProjectInfoFromForm();
     render();
   });
-});
-elements.projectCategoryInput.addEventListener("change", () => {
-  renderSubtypeOptions();
-  syncProjectInfoFromForm();
-  render();
-});
-elements.projectSubtypeInput.addEventListener("change", () => {
-  syncProjectInfoFromForm();
-  render();
-});
-elements.generateTemplateBtn.addEventListener("click", generateTemplate);
-elements.generateAllSpacesBtn.addEventListener("click", generateAllSpacesTemplate);
-elements.templateSpaceInput.addEventListener("change", () => {
-  activeLibraryCard = "space";
-  renderTemplateLibrary();
-});
-elements.templateStyleInput.addEventListener("change", () => {
-  activeLibraryCard = "style";
-  state.style = elements.templateStyleInput.value;
-  saveState();
-  renderTemplateLibrary();
-});
-elements.templateLibraryCards.addEventListener("click", (event) => {
-  const card = event.target.closest("[data-library-card]");
-  if (!card) return;
-  setLibraryCard(card.dataset.libraryCard);
-});
-elements.templateLibraryPanel.addEventListener("click", (event) => {
-  const spaceButton = event.target.closest("[data-library-space]");
-  if (spaceButton) {
-    selectLibrarySpace(spaceButton.dataset.librarySpace);
-    return;
+  safeAddEventListener(elements.projectSubtypeInput, "change", () => {
+    syncProjectInfoFromForm();
+    render();
+  });
+  safeClick(elements.generateTemplateBtn, generateTemplate);
+  safeClick(elements.generateAllSpacesBtn, generateAllSpacesTemplate);
+  safeAddEventListener(elements.templateSpaceInput, "change", () => {
+    activeLibraryCard = "space";
+    renderTemplateLibrary();
+  });
+  safeAddEventListener(elements.templateStyleInput, "change", () => {
+    activeLibraryCard = "style";
+    state.style = elements.templateStyleInput.value;
+    saveState();
+    renderTemplateLibrary();
+  });
+  safeClick(elements.templateLibraryCards, (event) => {
+    const card = event.target.closest("[data-library-card]");
+    if (card) setLibraryCard(card.dataset.libraryCard);
+  });
+  safeClick(elements.templateLibraryPanel, (event) => {
+    const spaceButton = event.target.closest("[data-library-space]");
+    if (spaceButton) return selectLibrarySpace(spaceButton.dataset.librarySpace);
+    const styleButton = event.target.closest("[data-library-style]");
+    if (styleButton) return selectLibraryStyle(styleButton.dataset.libraryStyle);
+    const modeButton = event.target.closest("[data-library-mode]");
+    if (modeButton) return selectDeliveryMode(modeButton.dataset.libraryMode);
+    const applyButton = event.target.closest("[data-library-action='apply']");
+    if (applyButton) applyLibraryTemplate();
+  });
+  [elements.newProjectBtn, elements.dropdownNewProjectBtn, elements.sidebarNewProjectBtn].forEach((button) => safeClick(button, addProject));
+  safeClick(elements.projectMenuBtn, toggleProjectMenu);
+  safeClick(elements.projectDropdownList, handleProjectAction);
+  safeClick(elements.sidebarProjectList, handleProjectAction);
+  safeAddEventListener(document, "click", (event) => {
+    if (elements.projectSwitcher && !elements.projectSwitcher.contains(event.target)) closeProjectMenu();
+  });
+  safeAddEventListener(document, "keydown", (event) => {
+    if (event.key === "Escape") closeProjectMenu();
+  });
+  safeAddEventListener(elements.exportModeInput, "change", (event) => {
+    exportMode = event.target.value;
+    clientMode = event.target.value === "client";
+    saveState();
+    render();
+    showToast(exportMode === "client" ? "已切换为客户汇报版导出" : "已切换为内部采购版导出");
+  });
+  safeClick(elements.importBtn, importSamples);
+  safeClick(elements.backupExportBtn, exportBackupJson);
+  safeClick(elements.backupImportBtn, () => elements.backupFileInput?.click());
+  safeClick(elements.legacyRecoveryBtn, openLegacyRecoveryCenter);
+  safeClick(elements.closeLegacyRecoveryBtn, () => elements.legacyRecoveryDialog?.close());
+  safeClick(elements.legacyRecoveryList, handleLegacyRecoveryAction);
+  safeAddEventListener(elements.backupFileInput, "change", (event) => importBackupJson(event.target.files?.[0]));
+  safeClick(elements.restoreSamplesBtn, restoreSampleData);
+  safeClick(elements.cleanupUnusedImagesBtn, cleanupUnusedImages);
+  safeClick(elements.deleteAllImagesBtn, deleteAllUploadedImages);
+  safeClick(elements.uploadBackupExportBtn, exportBackupJson);
+  safeClick(elements.uploadRestoreSamplesBtn, restoreSampleData);
+  safeClick(elements.exportBtn, exportCsv);
+  safeClick(elements.printClientBtn, printClientPdf);
+  safeClick(elements.filterPendingBtn, () => {
+    pendingOnly = true;
+    saveState();
+    render();
+    document.querySelector("#boq")?.scrollIntoView({ behavior: "smooth" });
+    showToast("已筛选待确认、采购询价中、需复核尺寸的产品");
+  });
+  safeClick(elements.clearFilterBtn, () => {
+    pendingOnly = false;
+    saveState();
+    render();
+  });
+  safeClick(elements.clientFieldsBtn, () => {
+    clientMode = !clientMode;
+    saveState();
+    render();
+    showToast(clientMode ? "已隐藏供应商、单价和内部备注" : "已显示完整内部字段");
+  });
+  safeAddEventListener(elements.searchInput, "input", (event) => {
+    query = event.target.value;
+    saveState();
+    render();
+  });
+  safeClick(elements.showSuggestionsBtn, () => elements.suggestionDialog?.showModal());
+  safeClick(elements.closeSuggestionBtn, () => elements.suggestionDialog?.close());
+  safeClick(elements.closeRenderingPickerBtn, () => elements.renderingPickerDialog?.close());
+  safeClick(elements.closeMaterialSwatchBtn, () => elements.materialSwatchDialog?.close());
+  safeClick(elements.materialSwatchDialog, (event) => {
+    const rect = elements.materialSwatchDialog.getBoundingClientRect();
+    const isBackdropClick = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+    if (isBackdropClick) elements.materialSwatchDialog.close();
+  });
+  safeClick(elements.renderingPickerDialog, (event) => {
+    const button = event.target.closest("button[data-action=\"select-rendering-image\"]");
+    if (!button) return;
+    selectRenderingImageForItem(elements.renderingPickerDialog.dataset.itemId, button.dataset.renderingId, button.dataset.crop);
+  });
+}
+
+function initializeApp() {
+  try {
+    setupEventBindings();
+    if (window.__maisonStartupError) enterSafeRecoveryMode(window.__maisonStartupError);
+    migrateInlineImagesToIndexedDb()
+      .then(() => saveState())
+      .then(() => recoverIndexedDbLegacyData())
+      .then(() => hydrateWorkspaceFromIndexedDb())
+      .catch((error) => console.warn("IndexedDB 图片恢复失败", error));
+    render();
+  } catch (error) {
+    console.error("应用初始化失败，已进入安全恢复模式", error);
+    enterSafeRecoveryMode(error);
   }
+}
 
-  const styleButton = event.target.closest("[data-library-style]");
-  if (styleButton) {
-    selectLibraryStyle(styleButton.dataset.libraryStyle);
-    return;
-  }
-
-  const modeButton = event.target.closest("[data-library-mode]");
-  if (modeButton) {
-    selectDeliveryMode(modeButton.dataset.libraryMode);
-    return;
-  }
-
-  const applyButton = event.target.closest("[data-library-action='apply']");
-  if (applyButton) applyLibraryTemplate();
-});
-elements.newProjectBtn.addEventListener("click", addProject);
-elements.dropdownNewProjectBtn.addEventListener("click", addProject);
-elements.sidebarNewProjectBtn.addEventListener("click", addProject);
-elements.projectMenuBtn.addEventListener("click", toggleProjectMenu);
-elements.projectDropdownList.addEventListener("click", handleProjectAction);
-elements.sidebarProjectList.addEventListener("click", handleProjectAction);
-document.addEventListener("click", (event) => {
-  if (!elements.projectSwitcher.contains(event.target)) closeProjectMenu();
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeProjectMenu();
-});
-elements.exportModeInput.addEventListener("change", (event) => {
-  exportMode = event.target.value;
-  clientMode = event.target.value === "client";
-  saveState();
-  render();
-  showToast(exportMode === "client" ? "已切换为客户汇报版导出" : "已切换为内部采购版导出");
-});
-elements.importBtn.addEventListener("click", importSamples);
-elements.backupExportBtn.addEventListener("click", exportBackupJson);
-elements.backupImportBtn.addEventListener("click", () => elements.backupFileInput.click());
-elements.legacyRecoveryBtn?.addEventListener("click", openLegacyRecoveryCenter);
-elements.closeLegacyRecoveryBtn?.addEventListener("click", () => elements.legacyRecoveryDialog.close());
-elements.legacyRecoveryList?.addEventListener("click", handleLegacyRecoveryAction);
-elements.backupFileInput.addEventListener("change", (event) => importBackupJson(event.target.files?.[0]));
-elements.restoreSamplesBtn.addEventListener("click", restoreSampleData);
-elements.cleanupUnusedImagesBtn?.addEventListener("click", cleanupUnusedImages);
-elements.deleteAllImagesBtn?.addEventListener("click", deleteAllUploadedImages);
-elements.uploadBackupExportBtn?.addEventListener("click", exportBackupJson);
-elements.uploadRestoreSamplesBtn?.addEventListener("click", restoreSampleData);
-elements.exportBtn.addEventListener("click", exportCsv);
-elements.printClientBtn.addEventListener("click", printClientPdf);
-elements.filterPendingBtn.addEventListener("click", () => {
-  pendingOnly = true;
-  saveState();
-  render();
-  document.querySelector("#boq").scrollIntoView({ behavior: "smooth" });
-  showToast("已筛选待确认、采购询价中、需复核尺寸的产品");
-});
-elements.clearFilterBtn.addEventListener("click", () => {
-  pendingOnly = false;
-  saveState();
-  render();
-});
-elements.clientFieldsBtn.addEventListener("click", () => {
-  clientMode = !clientMode;
-  saveState();
-  render();
-  showToast(clientMode ? "已隐藏供应商、单价和内部备注" : "已显示完整内部字段");
-});
-elements.searchInput.addEventListener("input", (event) => {
-  query = event.target.value;
-  saveState();
-  render();
-});
-elements.showSuggestionsBtn.addEventListener("click", () => elements.suggestionDialog.showModal());
-elements.closeSuggestionBtn.addEventListener("click", () => elements.suggestionDialog.close());
-elements.closeRenderingPickerBtn.addEventListener("click", () => elements.renderingPickerDialog.close());
-elements.closeMaterialSwatchBtn.addEventListener("click", () => elements.materialSwatchDialog.close());
-elements.materialSwatchDialog.addEventListener("click", (event) => {
-  const rect = elements.materialSwatchDialog.getBoundingClientRect();
-  const isBackdropClick = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
-  if (isBackdropClick) elements.materialSwatchDialog.close();
-});
-elements.renderingPickerDialog.addEventListener("click", (event) => {
-  const button = event.target.closest("button[data-action=\"select-rendering-image\"]");
-  if (!button) return;
-  selectRenderingImageForItem(elements.renderingPickerDialog.dataset.itemId, button.dataset.renderingId, button.dataset.crop);
-});
-
-migrateInlineImagesToIndexedDb()
-  .then(() => saveState())
-  .then(() => recoverIndexedDbLegacyData())
-  .then(() => hydrateWorkspaceFromIndexedDb())
-  .catch((error) => console.warn("IndexedDB 图片恢复失败", error));
-render();
+runWhenDomReady(initializeApp);
