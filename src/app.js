@@ -21,13 +21,17 @@ const UPLOAD_COLLECTIONS = {
 };
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const SUPPORTED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
-const MAX_IMAGE_FILE_SIZE = 25 * 1024 * 1024;
 const LARGE_IMAGE_SIZE = 2 * 1024 * 1024;
-const IMAGE_PREVIEW_MAX_EDGE = 1800;
-const IMAGE_PREVIEW_QUALITY = 0.86;
+const IMAGE_COMPRESSION_QUALITY = 0.78;
+const IMAGE_COMPRESSION_SETTINGS = {
+  floorPlans: { maxEdge: 1200, label: "平面图", storageNotice: "已压缩至最长边 1200px" },
+  renderings: { maxEdge: 1200, label: "效果图 / 软装方案", storageNotice: "已保存压缩预览图，用于生成清单参考" },
+  product: { maxEdge: 800, label: "产品彩图", storageNotice: "已压缩至最长边 800px" },
+  material: { maxEdge: 600, label: "材料样板贴图", storageNotice: "已压缩至最长边 600px" },
+};
 const IMAGE_DB_NAME = "maison-boq-images-v1";
 const IMAGE_STORE_NAME = "images";
-const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，已尝试改用 IndexedDB 保存图片预览。";
+const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，请删除部分图片或清理未使用图片。";
 const PRODUCT_IMAGE_SOURCES = new Set(["uploaded-rendering", "manual-upload", "placeholder"]);
 const PRODUCT_IMAGE_CROPS = {
   full: { label: "使用整张方案图", className: "crop-full" },
@@ -568,6 +572,10 @@ const elements = {
   backupImportBtn: document.querySelector("#backupImportBtn"),
   backupFileInput: document.querySelector("#backupFileInput"),
   restoreSamplesBtn: document.querySelector("#restoreSamplesBtn"),
+  cleanupUnusedImagesBtn: document.querySelector("#cleanupUnusedImagesBtn"),
+  deleteAllImagesBtn: document.querySelector("#deleteAllImagesBtn"),
+  uploadBackupExportBtn: document.querySelector("#uploadBackupExportBtn"),
+  uploadRestoreSamplesBtn: document.querySelector("#uploadRestoreSamplesBtn"),
   exportBtn: document.querySelector("#exportBtn"),
   printClientBtn: document.querySelector("#printClientBtn"),
   filterPendingBtn: document.querySelector("#filterPendingBtn"),
@@ -706,7 +714,7 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
     productImageCrop: normalizeProductImageCrop(item.productImageCrop),
     productImageUploaded,
     productImageStorageKey: item.productImageStorageKey || "",
-    productImageStorage: item.productImageStorage || "localStorage",
+    productImageStorage: item.productImageStorage || (item.productImageStorageKey ? "indexedDB" : "localStorage"),
     productName,
     size,
     quantity,
@@ -748,7 +756,7 @@ function normalizeMaterialSampleImages(images = []) {
       size: Number(image.size || 0),
       dataUrl: image.dataUrl || image.url || "",
       storageKey: image.storageKey || "",
-      storage: image.storage || "localStorage",
+      storage: image.storage || (image.storageKey ? "indexedDB" : "localStorage"),
       uploadedAt: image.uploadedAt || new Date().toISOString(),
     }).filter((image) => image.dataUrl || image.storageKey)
     : [];
@@ -795,7 +803,7 @@ function normalizeAttachmentList(list = []) {
       size: Number(file.size || 0),
       dataUrl: file.dataUrl || "",
       storageKey: file.storageKey || "",
-      storage: file.storage || "localStorage",
+      storage: file.storage || (file.storageKey ? "indexedDB" : "localStorage"),
       storageNotice: file.storageNotice || "",
       uploadedAt: file.uploadedAt || new Date().toISOString(),
     }))
@@ -823,7 +831,7 @@ function createPersistedWorkspace() {
       targetBudget: Number(project.targetBudget || 0),
       remark: project.remark || "",
       attachments: createPersistedAttachments(project.attachments),
-      items: project.items.map((item, index) => normalizeItem(item, index, project.style)),
+      items: project.items.map((item, index) => createPersistedItem(item, index, project.style)),
     })),
   };
 }
@@ -832,10 +840,20 @@ function createPersistedWorkspace() {
 function createPersistedAttachments(attachments = {}) {
   const normalized = normalizeAttachments(attachments);
   Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
-    normalized[collection] = normalized[collection].map((file) => (
-      file.storage === "indexedDB" && file.storageKey ? { ...file, dataUrl: "" } : file
-    ));
+    normalized[collection] = normalized[collection].map((file) => ({ ...file, dataUrl: "" }));
   });
+  return normalized;
+}
+
+function createPersistedItem(item, index, projectStyle) {
+  const normalized = normalizeItem(item, index, projectStyle);
+  if (normalized.productImageSource === "manual-upload" && normalized.productImageStorageKey) {
+    normalized.productImage = "";
+    normalized.productImageStorage = "indexedDB";
+  }
+  normalized.materialSampleImages = normalizeMaterialSampleImages(normalized.materialSampleImages).map((image) => (
+    image.storageKey ? { ...image, dataUrl: "", storage: "indexedDB" } : { ...image, dataUrl: "" }
+  ));
   return normalized;
 }
 
@@ -845,6 +863,107 @@ function buildImageStorageKey(projectId, collection, imageId) {
 
 function buildItemImageStorageKey(projectId, itemId, field, imageId = "main") {
   return `${projectId || "project"}:items:${itemId}:${field}:${imageId}`;
+}
+
+function collectReferencedImageKeys() {
+  const keys = new Set();
+  workspace.projects.forEach((project) => {
+    Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
+      (project.attachments?.[collection] || []).forEach((file) => {
+        if (file.storageKey) keys.add(file.storageKey);
+      });
+    });
+    (project.items || []).forEach((item) => {
+      if (item.productImageStorageKey) keys.add(item.productImageStorageKey);
+      normalizeMaterialSampleImages(item.materialSampleImages).forEach((image) => {
+        if (image.storageKey) keys.add(image.storageKey);
+      });
+    });
+  });
+  return keys;
+}
+
+async function cleanupUnusedImages() {
+  try {
+    const referencedKeys = collectReferencedImageKeys();
+    const allKeys = await getAllImageKeysFromIndexedDb();
+    const unusedKeys = allKeys.filter((key) => !referencedKeys.has(String(key)));
+    await Promise.all(unusedKeys.map((key) => deleteImageFromIndexedDb(key)));
+    showToast(`清理完成，释放了 ${unusedKeys.length} 张未使用图片`);
+  } catch (error) {
+    console.warn("清理未使用图片失败", error);
+    showToast(classifyImageStorageError(error));
+  }
+}
+
+async function deleteAllUploadedImages() {
+  if (!window.confirm("确认删除全部上传图片？项目结构与清单数据会保留，但上传的平面图、效果图、产品彩图和材料样板贴图将被移除。")) return;
+  const keys = collectReferencedImageKeys();
+  await Promise.allSettled([...keys].map((key) => deleteImageFromIndexedDb(key)));
+  workspace.projects.forEach((project) => {
+    project.attachments = { floorPlans: [], renderings: [] };
+    (project.items || []).forEach((item, index) => {
+      item.productImageStorageKey = "";
+      item.productImageStorage = "localStorage";
+      item.materialSampleImages = [];
+      if (item.productImageSource === "manual-upload" || item.productImageSource === "uploaded-rendering") {
+        item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(project));
+        item.productImageSource = "placeholder";
+        item.productImageCrop = null;
+        item.productImageUploaded = false;
+      }
+      item.code = formatItemCode(index);
+    });
+  });
+  state = getActiveProject();
+  saveState();
+  render();
+  showToast("已删除全部上传图片，项目结构与清单数据已保留");
+}
+
+async function createBackupWorkspaceWithImages() {
+  const backup = createPersistedWorkspace();
+  await Promise.all(backup.projects.flatMap((project) => [
+    ...Object.keys(UPLOAD_COLLECTIONS).flatMap((collection) => (project.attachments?.[collection] || []).map(async (file) => {
+      if (file.storageKey) file.dataUrl = await readImageFromIndexedDb(file.storageKey).catch(() => "");
+    })),
+    ...(project.items || []).map(async (item) => {
+      if (item.productImageStorageKey) item.productImage = await readImageFromIndexedDb(item.productImageStorageKey).catch(() => "");
+      await Promise.all((item.materialSampleImages || []).map(async (image) => {
+        if (image.storageKey) image.dataUrl = await readImageFromIndexedDb(image.storageKey).catch(() => "");
+      }));
+    }),
+  ]));
+  return backup;
+}
+
+async function persistImportedImagesFromBackup() {
+  const jobs = [];
+  workspace.projects.forEach((project) => {
+    Object.keys(UPLOAD_COLLECTIONS).forEach((collection) => {
+      (project.attachments?.[collection] || []).forEach((file) => {
+        if (!file.dataUrl) return;
+        file.storageKey = file.storageKey || buildImageStorageKey(project.id, collection, file.id);
+        file.storage = "indexedDB";
+        jobs.push(saveImageToIndexedDb(file.storageKey, file.dataUrl));
+      });
+    });
+    (project.items || []).forEach((item) => {
+      if (item.productImage && item.productImageSource === "manual-upload") {
+        item.productImageStorageKey = item.productImageStorageKey || buildItemImageStorageKey(project.id, item.id, "productImage");
+        item.productImageStorage = "indexedDB";
+        jobs.push(saveImageToIndexedDb(item.productImageStorageKey, item.productImage));
+      }
+      item.materialSampleImages = normalizeMaterialSampleImages(item.materialSampleImages).map((image) => {
+        if (!image.dataUrl) return image;
+        const storageKey = image.storageKey || buildItemImageStorageKey(project.id, item.id, "materialSampleImages", image.id);
+        jobs.push(saveImageToIndexedDb(storageKey, image.dataUrl));
+        return { ...image, storageKey, storage: "indexedDB" };
+      });
+    });
+  });
+  const results = await Promise.allSettled(jobs);
+  if (results.some((result) => result.status === "rejected")) throw new Error("浏览器存储空间不足，请删除部分图片或清理未使用图片");
 }
 
 function openImageDb() {
@@ -895,6 +1014,28 @@ function readImageFromIndexedDb(key) {
 
 function deleteImageFromIndexedDb(key) {
   return withImageStore("readwrite", (store) => store.delete(key));
+}
+
+function getAllImageKeysFromIndexedDb() {
+  return withImageStore("readonly", (store) => store.getAllKeys());
+}
+
+function classifyImageStorageError(error) {
+  const message = String(error?.message || error || "");
+  if (!globalThis.indexedDB || /不支持 IndexedDB/i.test(message)) return "当前浏览器不支持 IndexedDB";
+  if (/quota|storage|空间|存储|exceeded|full/i.test(message) || error?.name === "QuotaExceededError") {
+    return "浏览器存储空间不足，请删除部分图片或清理未使用图片";
+  }
+  return message || "IndexedDB 保存失败，请稍后重试";
+}
+
+async function saveCompressedImageRecord(record, storageKey) {
+  try {
+    await saveImageToIndexedDb(storageKey, record.dataUrl);
+    return { ...record, storageKey, storage: "indexedDB" };
+  } catch (error) {
+    throw new Error(classifyImageStorageError(error));
+  }
 }
 
 function markWorkspaceImageAsIndexedDb(projectId, collection, imageId, storageKey) {
@@ -1643,15 +1784,15 @@ function renderUploadCollection(collection) {
 async function handleUploadFiles(collection, fileList) {
   const selectedFiles = Array.from(fileList || []);
   if (!selectedFiles.length) return;
-  const results = await Promise.allSettled(selectedFiles.map(readImageFile));
+  const results = await Promise.allSettled(selectedFiles.map(async (file) => {
+    const compressed = await readImageFile(file, collection);
+    const storageKey = buildImageStorageKey(state.id, collection, compressed.id);
+    return saveCompressedImageRecord(compressed, storageKey);
+  }));
   const uploadedFiles = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
-  const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason?.message || "读取失败，请重新上传");
+  const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason?.message || "图片读取失败，请重新上传");
   if (uploadedFiles.length) {
     state.attachments = normalizeAttachments(state.attachments);
-    uploadedFiles.forEach((file) => {
-      file.storageKey = buildImageStorageKey(state.id, collection, file.id);
-      saveImageToIndexedDb(file.storageKey, file.dataUrl).catch((error) => console.warn("IndexedDB 图片保存失败", error));
-    });
     state.attachments[collection] = [...state.attachments[collection], ...uploadedFiles];
     saveState();
     renderUploadPreviews();
@@ -1662,22 +1803,23 @@ async function handleUploadFiles(collection, fileList) {
     showToast([...new Set(failures)].join("；"));
     return;
   }
-  const previewNotice = uploadedFiles.some((file) => file.storageNotice) ? "，较大图片已保存预览图" : "";
-  showToast(`已上传 ${uploadedFiles.length} 张${UPLOAD_COLLECTIONS[collection].label}${previewNotice}`);
+  if (collection === "renderings") {
+    showToast("已保存压缩预览图，用于生成清单参考");
+    return;
+  }
+  const compressedNotice = uploadedFiles.some((file) => file.wasCompressed || file.size >= LARGE_IMAGE_SIZE) ? "，图片过大，已尝试压缩" : "";
+  showToast(`已上传 ${uploadedFiles.length} 张${UPLOAD_COLLECTIONS[collection].label}${compressedNotice}`);
 }
 
 function validateImageFile(file) {
   const hasSupportedType = SUPPORTED_IMAGE_TYPES.has(file.type);
   const hasSupportedExtension = SUPPORTED_IMAGE_EXTENSIONS.test(file.name || "");
   if (!hasSupportedType && !hasSupportedExtension) {
-    throw new Error(`${file.name || "图片"} 格式不支持，请上传 JPG、JPEG、PNG 或 WebP`);
-  }
-  if (file.size > MAX_IMAGE_FILE_SIZE) {
-    throw new Error(`${file.name || "图片"} 图片过大，请压缩到 25MB 以内后重新上传`);
+    throw new Error(`${file.name || "图片"} 图片格式不支持，请使用 JPG、PNG、WebP`);
   }
 }
 
-function readImageFile(file) {
+function readImageFile(file, purpose = "floorPlans") {
   return new Promise((resolve, reject) => {
     try {
       validateImageFile(file);
@@ -1685,39 +1827,23 @@ function readImageFile(file) {
       reject(error);
       return;
     }
-    const reader = new FileReader();
-    reader.addEventListener("load", async () => {
-      const originalDataUrl = String(reader.result || "");
-      if (!originalDataUrl.startsWith("data:image/")) {
-        reject(new Error(`${file.name || "图片"} 读取失败，请重新上传`));
-        return;
-      }
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.addEventListener("load", async () => {
       try {
-        const dataUrl = file.size >= LARGE_IMAGE_SIZE ? await compressImageDataUrl(originalDataUrl, file.type) : originalDataUrl;
-        resolve({
-          id: createId(),
-          name: file.name,
-          type: file.type || inferImageType(file.name),
-          size: file.size,
-          dataUrl,
-          storageNotice: dataUrl !== originalDataUrl ? "已保存预览图" : "",
-          uploadedAt: new Date().toISOString(),
-        });
+        const compressed = await compressLoadedImage(image, file, purpose);
+        resolve(compressed);
       } catch (error) {
-        console.warn("图片压缩失败，使用原图预览", error);
-        resolve({
-          id: createId(),
-          name: file.name,
-          type: file.type || inferImageType(file.name),
-          size: file.size,
-          dataUrl: originalDataUrl,
-          uploadedAt: new Date().toISOString(),
-        });
+        reject(new Error(error.message || `${file.name || "图片"} 图片过大，已尝试压缩，但压缩失败`));
+      } finally {
+        URL.revokeObjectURL(objectUrl);
       }
     });
-    reader.addEventListener("error", () => reject(new Error(`${file.name || "图片"} 读取失败，请重新上传`)));
-    reader.addEventListener("abort", () => reject(new Error(`${file.name || "图片"} 读取已取消，请重新上传`)));
-    reader.readAsDataURL(file);
+    image.addEventListener("error", () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error(`${file.name || "图片"} 图片读取失败，可能是图片格式不支持，请使用 JPG、PNG、WebP`));
+    });
+    image.src = objectUrl;
   });
 }
 
@@ -1727,25 +1853,71 @@ function inferImageType(name = "") {
   return "image/jpeg";
 }
 
-function compressImageDataUrl(dataUrl, type) {
+function getCompressionSettings(purpose = "floorPlans") {
+  return IMAGE_COMPRESSION_SETTINGS[purpose] || IMAGE_COMPRESSION_SETTINGS.floorPlans;
+}
+
+function compressLoadedImage(image, file, purpose = "floorPlans") {
+  return new Promise((resolve, reject) => {
+    const settings = getCompressionSettings(purpose);
+    const maxEdge = settings.maxEdge;
+    const longestEdge = Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height);
+    const scale = Math.min(1, maxEdge / Math.max(1, longestEdge));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    canvas.height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      reject(new Error("无法压缩图片"));
+      return;
+    }
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const finish = (blob, mimeType) => {
+      if (!blob) {
+        reject(new Error("图片过大，已尝试压缩，但当前浏览器无法生成压缩图片"));
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        const dataUrl = String(reader.result || "");
+        if (!dataUrl.startsWith("data:image/")) {
+          reject(new Error("图片读取失败，请重新上传"));
+          return;
+        }
+        resolve({
+          id: createId(),
+          name: file.name,
+          type: mimeType,
+          size: blob.size,
+          originalSize: file.size,
+          width: canvas.width,
+          height: canvas.height,
+          dataUrl,
+          storageNotice: settings.storageNotice,
+          wasCompressed: scale < 1 || blob.size < file.size || file.size >= LARGE_IMAGE_SIZE,
+          uploadedAt: new Date().toISOString(),
+        });
+      });
+      reader.addEventListener("error", () => reject(new Error("图片读取失败，请重新上传")));
+      reader.readAsDataURL(blob);
+    };
+    const tryJpeg = () => canvas.toBlob((blob) => finish(blob, "image/jpeg"), "image/jpeg", IMAGE_COMPRESSION_QUALITY);
+    canvas.toBlob((blob) => {
+      if (blob) finish(blob, "image/webp");
+      else tryJpeg();
+    }, "image/webp", IMAGE_COMPRESSION_QUALITY);
+  });
+}
+
+function compressImageDataUrl(dataUrl, type, purpose = "floorPlans") {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.addEventListener("load", () => {
-      const scale = Math.min(1, IMAGE_PREVIEW_MAX_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
-      if (scale >= 1) {
-        resolve(dataUrl);
-        return;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-      const context = canvas.getContext("2d");
-      if (!context) {
-        reject(new Error("无法压缩图片"));
-        return;
-      }
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL(type === "image/png" ? "image/png" : "image/jpeg", IMAGE_PREVIEW_QUALITY));
+      compressLoadedImage(image, { name: "图片", size: dataUrl.length, type: type || "image/jpeg" }, purpose)
+        .then((record) => resolve(record.dataUrl))
+        .catch(reject);
     });
     image.addEventListener("error", () => reject(new Error("读取失败，请重新上传")));
     image.src = dataUrl;
@@ -1781,18 +1953,24 @@ function promptItemImageUpload(item, kind) {
     const files = Array.from(input.files || []);
     if (!files.length) return;
     try {
-      const images = await Promise.all(files.map(readImageFile));
+      const images = await Promise.all(files.map(async (file) => {
+        const compressed = await readImageFile(file, kind === "product" ? "product" : "material");
+        const storageKey = buildItemImageStorageKey(state.id, item.id, kind === "product" ? "productImage" : "materialSampleImages", compressed.id);
+        return saveCompressedImageRecord(compressed, storageKey);
+      }));
       if (kind === "product") {
+        if (item.productImageStorageKey && item.productImageSource === "manual-upload") deleteImageFromIndexedDb(item.productImageStorageKey).catch((error) => console.warn("删除旧产品图 IndexedDB 失败", error));
         item.productImage = images[0].dataUrl;
         item.productImageSource = "manual-upload";
         item.productImageCrop = null;
         item.productImageUploaded = true;
-        item.productImageStorageKey = "";
-        showToast("已上传/替换真实软装产品彩图");
+        item.productImageStorageKey = images[0].storageKey;
+        item.productImageStorage = "indexedDB";
+        showToast("已上传/替换真实软装产品彩图，产品彩图已压缩至最长边 800px");
       } else {
         const existing = normalizeMaterialSampleImages(item.materialSampleImages);
         item.materialSampleImages = [...existing, ...images].slice(0, 3);
-        showToast(`已上传 ${Math.min(images.length, 3)} 张材料样板贴图`);
+        showToast(`已上传 ${Math.min(images.length, 3)} 张材料样板贴图，已压缩至最长边 600px`);
       }
       saveState();
       render();
@@ -2195,17 +2373,18 @@ function downloadJson(filename, data) {
   URL.revokeObjectURL(link.href);
 }
 
-function exportBackupJson() {
+async function exportBackupJson() {
   saveState();
   const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
-  downloadJson(`maison-boq-backup-${timestamp}.json`, createPersistedWorkspace());
-  showToast("已导出完整项目备份 JSON");
+  const backup = await createBackupWorkspaceWithImages();
+  downloadJson(`maison-boq-backup-${timestamp}.json`, backup);
+  showToast("已导出完整项目与图片备份 JSON");
 }
 
 function importBackupJson(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.addEventListener("load", () => {
+  reader.addEventListener("load", async () => {
     try {
       const parsed = JSON.parse(String(reader.result || "{}"));
       const nextWorkspace = normalizeWorkspace(migrateLegacyData(parsed) || parsed);
@@ -2214,6 +2393,7 @@ function importBackupJson(file) {
       workspace.activeProjectId = nextWorkspace.activeProjectId;
       workspace.projects = nextWorkspace.projects;
       state = getActiveProject();
+      await persistImportedImagesFromBackup();
       pendingOnly = false;
       query = "";
       saveState();
@@ -2221,7 +2401,7 @@ function importBackupJson(file) {
       showToast(`已导入 ${workspace.projects.length} 个项目备份`);
     } catch (error) {
       console.warn("导入备份失败", error);
-      showToast("备份 JSON 格式不正确，导入失败");
+      showToast(error.message || "备份 JSON 格式不正确，导入失败");
     } finally {
       elements.backupFileInput.value = "";
     }
@@ -2587,6 +2767,10 @@ elements.backupExportBtn.addEventListener("click", exportBackupJson);
 elements.backupImportBtn.addEventListener("click", () => elements.backupFileInput.click());
 elements.backupFileInput.addEventListener("change", (event) => importBackupJson(event.target.files?.[0]));
 elements.restoreSamplesBtn.addEventListener("click", restoreSampleData);
+elements.cleanupUnusedImagesBtn?.addEventListener("click", cleanupUnusedImages);
+elements.deleteAllImagesBtn?.addEventListener("click", deleteAllUploadedImages);
+elements.uploadBackupExportBtn?.addEventListener("click", exportBackupJson);
+elements.uploadRestoreSamplesBtn?.addEventListener("click", restoreSampleData);
 elements.exportBtn.addEventListener("click", exportCsv);
 elements.printClientBtn.addEventListener("click", printClientPdf);
 elements.filterPendingBtn.addEventListener("click", () => {
