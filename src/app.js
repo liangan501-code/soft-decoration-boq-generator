@@ -526,6 +526,42 @@ const deliveryModes = {
   },
 };
 
+const MATERIAL_SWATCH_RECIPES = {
+  餐桌: ["stone", "wood", "metal"],
+  餐椅: ["fabric", "leather", "metal", "wood"],
+  吊灯: ["metal", "glass", "acrylic"],
+  地毯: ["carpet", "velvet", "pattern"],
+  艺术摆件: ["ceramic", "metal", "stone"],
+  摆件: ["ceramic", "metal", "stone"],
+  茶几: ["stone", "wood", "metal", "glass"],
+  边几: ["stone", "wood", "metal"],
+  沙发: ["fabric", "leather", "wood"],
+  主沙发: ["fabric", "leather", "wood"],
+  休闲椅: ["fabric", "leather", "wood", "metal"],
+  单椅: ["leather", "fabric", "metal"],
+  窗帘: ["fabric", "linen", "sheer"],
+  床: ["fabric", "leather", "wood"],
+  床品: ["fabric", "linen", "pattern"],
+  装饰画: ["canvas", "wood", "metal"],
+  落地灯: ["metal", "fabric", "glass"],
+};
+
+const MATERIAL_STYLE_LABELS = {
+  奶油风: { stone: "米白石材", wood: "浅橡木", metal: "浅金金属", fabric: "奶油布艺", leather: "米灰皮革", glass: "柔白玻璃", acrylic: "雾面亚克力", carpet: "奶油绒毯", velvet: "短绒面", pattern: "浅色纹理", ceramic: "米白陶瓷", linen: "亚麻", sheer: "柔光纱", canvas: "肌理画布" },
+  中古风: { stone: "暖灰洞石", wood: "胡桃木", metal: "做旧铜", fabric: "橄榄布艺", leather: "复古皮革", glass: "茶色玻璃", acrylic: "琥珀亚克力", carpet: "手工羊毛", velvet: "复古绒面", pattern: "几何纹理", ceramic: "手作陶瓷", linen: "棉麻", sheer: "米灰纱", canvas: "抽象画布" },
+  轻奢风: { stone: "象牙岩板", wood: "烟熏木", metal: "香槟金属", fabric: "丝绒布艺", leather: "雾灰皮革", glass: "白玻璃", acrylic: "透光亚克力", carpet: "丝感地毯", velvet: "低光丝绒", pattern: "轻奢纹理", ceramic: "亮釉陶瓷", linen: "精纺布", sheer: "柔雾纱", canvas: "金属框画布" },
+  法式: { stone: "米色石材", wood: "雕花木", metal: "雾金金属", fabric: "奶油布艺", leather: "复古皮革", glass: "白玻璃", acrylic: "乳白亚克力", carpet: "法式花纹", velvet: "柔雾绒面", pattern: "卷草纹理", ceramic: "珍珠陶瓷", linen: "棉麻", sheer: "法式纱", canvas: "复古画布" },
+  雅奢: { stone: "暖灰大理石", wood: "深咖木饰面", metal: "古铜金属", fabric: "混纺面料", leather: "细纹真皮", glass: "烟灰玻璃", acrylic: "雾面亚克力", carpet: "手工羊毛", velvet: "哑光绒面", pattern: "低饱和纹理", ceramic: "艺术陶瓷", linen: "高级亚麻", sheer: "暖灰纱", canvas: "肌理画布" },
+  度假风: { stone: "沙色洞石", wood: "柚木", metal: "哑光铜", fabric: "亚麻布艺", leather: "自然皮革", glass: "清透玻璃", acrylic: "海盐亚克力", carpet: "自然编织", velvet: "短绒面", pattern: "棕榈纹理", ceramic: "手工陶", linen: "粗织亚麻", sheer: "海盐纱", canvas: "自然画布" },
+  黑金风: { stone: "黑色岩板", wood: "深色木饰面", metal: "黑钛金属", fabric: "深灰布艺", leather: "黑色皮革", glass: "黑晶玻璃", acrylic: "曜石亚克力", carpet: "深灰羊毛", velvet: "黑金绒面", pattern: "暗纹纹理", ceramic: "黑釉陶瓷", linen: "黑灰织物", sheer: "烟灰纱", canvas: "黑金画布" },
+  现代东方: { stone: "深色石材", wood: "胡桃木", metal: "哑光铜", fabric: "亚麻布艺", leather: "深棕皮革", glass: "烟墨玻璃", acrylic: "宣纸亚克力", carpet: "东方织纹", velvet: "墨色绒面", pattern: "留白纹理", ceramic: "手作陶", linen: "亚麻", sheer: "宣纸纱", canvas: "水墨画布" },
+};
+
+const MATERIAL_BASE_COLORS = {
+  stone: ["#f2eadc", "#b8aa98", "#8f887d"], wood: ["#8a5f3d", "#5b3824", "#c69a67"], metal: ["#e3c875", "#9d7935", "#f7e5a6"], fabric: ["#efe4d2", "#c8b79e", "#fff8ec"], leather: ["#9b6740", "#5b3523", "#d39b66"], glass: ["#eef4f1", "#b9cbc6", "#ffffff"], acrylic: ["#f6f1e8", "#d5cbbd", "#ffffff"], carpet: ["#e9dcc8", "#b79f82", "#f8f0e3"], velvet: ["#c8b28e", "#7e694c", "#ead8b8"], pattern: ["#efe6d7", "#9b8d78", "#d7c6ac"], ceramic: ["#f6efe3", "#c5b191", "#fffaf1"], linen: ["#eadcc6", "#b8a186", "#fff7e8"], sheer: ["#fbf7ef", "#ddd1c1", "#ffffff"], canvas: ["#ece0ce", "#b9a78f", "#fffaf1"], acrylic: ["#f4eee8", "#cbbfaf", "#ffffff"]
+};
+
+
 let workspace;
 try {
   workspace = loadWorkspace();
@@ -1057,41 +1093,6 @@ function normalizeMaterialSampleImages(images = []) {
 }
 
 
-const MATERIAL_SWATCH_RECIPES = {
-  餐桌: ["stone", "wood", "metal"],
-  餐椅: ["fabric", "leather", "metal", "wood"],
-  吊灯: ["metal", "glass", "acrylic"],
-  地毯: ["carpet", "velvet", "pattern"],
-  艺术摆件: ["ceramic", "metal", "stone"],
-  摆件: ["ceramic", "metal", "stone"],
-  茶几: ["stone", "wood", "metal", "glass"],
-  边几: ["stone", "wood", "metal"],
-  沙发: ["fabric", "leather", "wood"],
-  主沙发: ["fabric", "leather", "wood"],
-  休闲椅: ["fabric", "leather", "wood", "metal"],
-  单椅: ["leather", "fabric", "metal"],
-  窗帘: ["fabric", "linen", "sheer"],
-  床: ["fabric", "leather", "wood"],
-  床品: ["fabric", "linen", "pattern"],
-  装饰画: ["canvas", "wood", "metal"],
-  落地灯: ["metal", "fabric", "glass"],
-};
-
-const MATERIAL_STYLE_LABELS = {
-  奶油风: { stone: "米白石材", wood: "浅橡木", metal: "浅金金属", fabric: "奶油布艺", leather: "米灰皮革", glass: "柔白玻璃", acrylic: "雾面亚克力", carpet: "奶油绒毯", velvet: "短绒面", pattern: "浅色纹理", ceramic: "米白陶瓷", linen: "亚麻", sheer: "柔光纱", canvas: "肌理画布" },
-  中古风: { stone: "暖灰洞石", wood: "胡桃木", metal: "做旧铜", fabric: "橄榄布艺", leather: "复古皮革", glass: "茶色玻璃", acrylic: "琥珀亚克力", carpet: "手工羊毛", velvet: "复古绒面", pattern: "几何纹理", ceramic: "手作陶瓷", linen: "棉麻", sheer: "米灰纱", canvas: "抽象画布" },
-  轻奢风: { stone: "象牙岩板", wood: "烟熏木", metal: "香槟金属", fabric: "丝绒布艺", leather: "雾灰皮革", glass: "白玻璃", acrylic: "透光亚克力", carpet: "丝感地毯", velvet: "低光丝绒", pattern: "轻奢纹理", ceramic: "亮釉陶瓷", linen: "精纺布", sheer: "柔雾纱", canvas: "金属框画布" },
-  法式: { stone: "米色石材", wood: "雕花木", metal: "雾金金属", fabric: "奶油布艺", leather: "复古皮革", glass: "白玻璃", acrylic: "乳白亚克力", carpet: "法式花纹", velvet: "柔雾绒面", pattern: "卷草纹理", ceramic: "珍珠陶瓷", linen: "棉麻", sheer: "法式纱", canvas: "复古画布" },
-  雅奢: { stone: "暖灰大理石", wood: "深咖木饰面", metal: "古铜金属", fabric: "混纺面料", leather: "细纹真皮", glass: "烟灰玻璃", acrylic: "雾面亚克力", carpet: "手工羊毛", velvet: "哑光绒面", pattern: "低饱和纹理", ceramic: "艺术陶瓷", linen: "高级亚麻", sheer: "暖灰纱", canvas: "肌理画布" },
-  度假风: { stone: "沙色洞石", wood: "柚木", metal: "哑光铜", fabric: "亚麻布艺", leather: "自然皮革", glass: "清透玻璃", acrylic: "海盐亚克力", carpet: "自然编织", velvet: "短绒面", pattern: "棕榈纹理", ceramic: "手工陶", linen: "粗织亚麻", sheer: "海盐纱", canvas: "自然画布" },
-  黑金风: { stone: "黑色岩板", wood: "深色木饰面", metal: "黑钛金属", fabric: "深灰布艺", leather: "黑色皮革", glass: "黑晶玻璃", acrylic: "曜石亚克力", carpet: "深灰羊毛", velvet: "黑金绒面", pattern: "暗纹纹理", ceramic: "黑釉陶瓷", linen: "黑灰织物", sheer: "烟灰纱", canvas: "黑金画布" },
-  现代东方: { stone: "深色石材", wood: "胡桃木", metal: "哑光铜", fabric: "亚麻布艺", leather: "深棕皮革", glass: "烟墨玻璃", acrylic: "宣纸亚克力", carpet: "东方织纹", velvet: "墨色绒面", pattern: "留白纹理", ceramic: "手作陶", linen: "亚麻", sheer: "宣纸纱", canvas: "水墨画布" },
-};
-
-const MATERIAL_BASE_COLORS = {
-  stone: ["#f2eadc", "#b8aa98", "#8f887d"], wood: ["#8a5f3d", "#5b3824", "#c69a67"], metal: ["#e3c875", "#9d7935", "#f7e5a6"], fabric: ["#efe4d2", "#c8b79e", "#fff8ec"], leather: ["#9b6740", "#5b3523", "#d39b66"], glass: ["#eef4f1", "#b9cbc6", "#ffffff"], acrylic: ["#f6f1e8", "#d5cbbd", "#ffffff"], carpet: ["#e9dcc8", "#b79f82", "#f8f0e3"], velvet: ["#c8b28e", "#7e694c", "#ead8b8"], pattern: ["#efe6d7", "#9b8d78", "#d7c6ac"], ceramic: ["#f6efe3", "#c5b191", "#fffaf1"], linen: ["#eadcc6", "#b8a186", "#fff7e8"], sheer: ["#fbf7ef", "#ddd1c1", "#ffffff"], canvas: ["#ece0ce", "#b9a78f", "#fffaf1"], acrylic: ["#f4eee8", "#cbbfaf", "#ffffff"]
-};
-
 function normalizeMaterialSwatches(swatches = [], product = {}, projectStyle = getProjectStyle(state || {})) {
   const normalized = Array.isArray(swatches)
     ? swatches.filter(Boolean).slice(0, 4).map((swatch) => normalizeMaterialSwatch(swatch, product, projectStyle)).filter(Boolean)
@@ -1174,10 +1175,24 @@ function buildSwatchPreviewData(product = {}) {
 }
 
 function getMaterialRecipe(category = "", materialText = "") {
-  const directKey = Object.keys(MATERIAL_SWATCH_RECIPES).find((key) => category.includes(key) || materialText.includes(key));
-  if (directKey) return MATERIAL_SWATCH_RECIPES[directKey];
+  const recipes = getMaterialSwatchRecipes();
+  const directKey = Object.keys(recipes).find((key) => category.includes(key) || materialText.includes(key));
+  if (directKey) return recipes[directKey];
   const inferred = ["wood", "stone", "metal", "fabric", "leather", "glass", "carpet", "ceramic"].filter((type) => materialText.includes(getMaterialTypeName(type).replace(/材|面|纹理/g, "")) || materialText.includes(getMaterialLabel(type, getProjectStyle(state))));
-  return inferred.length ? inferred : ["fabric", "wood", "metal"];
+  return inferred.length ? inferred : getDefaultMaterialRecipe();
+}
+
+function getMaterialSwatchRecipes() {
+  try {
+    if (MATERIAL_SWATCH_RECIPES && typeof MATERIAL_SWATCH_RECIPES === "object") return MATERIAL_SWATCH_RECIPES;
+  } catch (error) {
+    console.warn("材料样板配置尚未完成初始化，已使用默认配置", error);
+  }
+  return { 软装: getDefaultMaterialRecipe() };
+}
+
+function getDefaultMaterialRecipe() {
+  return ["fabric", "wood", "metal"];
 }
 
 function buildGeneratedSwatchId(product, style, type, index) {
