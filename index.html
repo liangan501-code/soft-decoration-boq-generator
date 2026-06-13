@@ -152,7 +152,7 @@
                   <div class="upload-dropzone" data-upload-trigger="floorPlans">
                     <span class="upload-icon">⌁</span>
                     <p>上传平面布置图 / 尺寸图</p>
-                    <small>支持 JPG、PNG、WebP，可上传多张</small>
+                    <small>支持 JPG、PNG、WebP；建议单张不超过 5MB，上传后自动压缩至最长边 1200px 并存入 IndexedDB</small>
                   </div>
                   <div class="upload-preview-grid" id="floorPlanPreview" aria-label="平面图预览"></div>
                 </article>
@@ -169,11 +169,24 @@
                   <div class="upload-dropzone" data-upload-trigger="renderings">
                     <span class="upload-icon">✦</span>
                     <p>上传客餐厅、卧室、公区等效果图或软装方案</p>
-                    <small>支持多张效果图、软装方案图，生成时用于风格与陈设判断</small>
+                    <small>建议单张不超过 8MB；仅保存压缩预览图，用于生成清单参考</small>
                   </div>
                   <div class="upload-preview-grid" id="renderingPreview" aria-label="效果图 / 软装方案预览"></div>
                 </article>
               </div>
+              <div class="image-storage-manager" aria-label="图片存储管理">
+                <div>
+                  <strong>图片存储管理</strong>
+                  <p>localStorage 仅保存项目结构、图片 ID 与元信息；图片本体压缩后保存到 IndexedDB。</p>
+                </div>
+                <div class="image-storage-actions">
+                  <button class="mini-button" type="button" id="cleanupUnusedImagesBtn">清理未使用图片</button>
+                  <button class="mini-button danger" type="button" id="deleteAllImagesBtn">删除全部上传图片</button>
+                  <button class="mini-button" type="button" id="uploadBackupExportBtn">导出数据备份</button>
+                  <button class="mini-button" type="button" id="uploadRestoreSamplesBtn">恢复示例数据</button>
+                </div>
+              </div>
+              <p class="upload-size-hint">建议上传：平面图 / 尺寸图单张不超过 5MB；效果图 / 软装方案单张不超过 8MB；产品彩图单张不超过 3MB；材料样板贴图单张不超过 2MB。若图片过大，系统会先自动压缩后再保存。</p>
               <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图 / 软装方案，系统需要根据图纸与空间效果生成清单。</p>
               <p class="upload-reference-note">当前静态版本会优先使用上传的效果图 / 软装方案作为产品参考图。若需要精准识别并裁切具体沙发、灯具、地毯等单品，后续可接入 AI 图像识别接口。</p>
             </section>

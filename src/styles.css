@@ -835,6 +835,34 @@ td {
   font-size: 11px;
   font-weight: 900;
 }
+
+.image-storage-manager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(93, 112, 75, .18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(232, 238, 224, .9), rgba(255, 250, 241, .92));
+}
+.image-storage-manager strong { display: block; color: #2f3a30; font-weight: 900; }
+.image-storage-manager p { margin: 4px 0 0 !important; color: #70685b !important; font-size: 12px; font-weight: 800; line-height: 1.55; }
+.image-storage-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.mini-button.danger { color: #fff8ec; background: #a24b3f; }
+.upload-size-hint {
+  margin: 10px 0 0 !important;
+  padding: 12px 14px;
+  border: 1px dashed rgba(164, 127, 64, .34);
+  border-radius: 16px;
+  color: #665d50 !important;
+  background: rgba(255, 253, 248, .76);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.7;
+}
+
 .upload-requirement {
   margin: 14px 0 0 !important;
   padding: 12px 14px;
