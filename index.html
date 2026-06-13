@@ -69,6 +69,7 @@
             <button class="ghost-button" type="button" id="importBtn">⇧ 导入清单</button>
             <button class="ghost-button" type="button" id="backupExportBtn">⤓ 导出备份 JSON</button>
             <button class="ghost-button" type="button" id="backupImportBtn">⤒ 导入备份 JSON</button>
+            <button class="ghost-button" type="button" id="legacyRecoveryBtn">恢复旧版本数据</button>
             <button class="ghost-button danger-soft" type="button" id="restoreSamplesBtn">↺ 恢复示例数据</button>
             <input id="backupFileInput" type="file" accept="application/json,.json" hidden />
             <label class="export-mode" for="exportModeInput">导出
@@ -463,6 +464,19 @@
         <li>主卧窗帘建议先复尺后锁单，避免布料损耗超预算。</li>
         <li>玄关艺术品可保留为客户版备选项，内部版继续追踪交期。</li>
       </ul>
+    </dialog>
+
+
+    <dialog class="legacy-recovery-dialog" id="legacyRecoveryDialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">Data Recovery</p>
+          <h3>数据恢复中心</h3>
+        </div>
+        <button class="icon-button" type="button" id="closeLegacyRecoveryBtn" aria-label="关闭">×</button>
+      </div>
+      <p class="legacy-recovery-intro">系统会扫描 localStorage 中所有已知旧版本 key，以及包含 boq、maison、project、soft、decor 字样的 key。建议优先使用“合并”，避免覆盖当前项目。</p>
+      <div class="legacy-recovery-list" id="legacyRecoveryList"></div>
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
