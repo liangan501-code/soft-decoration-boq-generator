@@ -1,5 +1,5 @@
 const STORAGE_KEY = "maison-boq-state-v1";
-const CURRENT_DATA_VERSION = 6;
+const CURRENT_DATA_VERSION = 7;
 const KNOWN_LEGACY_STORAGE_KEYS = [
   "maison-boq-state-v1",
   "maison-boq-state",
@@ -28,7 +28,7 @@ const PROJECT_SUBTYPES = {
   工装: ["样板间", "售楼处", "会所", "酒店", "办公空间", "商业公区"],
 };
 const RESIDENTIAL_SPACES = ["客厅", "餐厅", "主卧", "次卧", "玄关", "书房"];
-const COMMERCIAL_SPACES = ["样板间", "售楼处", "洽谈区", "沙盘区", "VIP室", "会所休闲区", "公区"];
+const COMMERCIAL_SPACES = ["样板间客厅", "样板间餐厅", "主卧", "次卧", "玄关", "洽谈区", "沙盘区", "VIP室", "会所休闲区", "公区"];
 const UPLOAD_COLLECTIONS = {
   floorPlans: { label: "平面图", status: "floorPlanUploadStatus", preview: "floorPlanPreview" },
   renderings: { label: "效果图 / 软装方案", status: "renderingUploadStatus", preview: "renderingPreview" },
@@ -40,13 +40,13 @@ const IMAGE_COMPRESSION_QUALITY = 0.78;
 const IMAGE_COMPRESSION_SETTINGS = {
   floorPlans: { maxEdge: 1200, label: "平面图", storageNotice: "已压缩至最长边 1200px" },
   renderings: { maxEdge: 1200, label: "效果图 / 软装方案", storageNotice: "已保存压缩预览图，用于生成清单参考" },
-  product: { maxEdge: 800, label: "产品彩图", storageNotice: "已压缩至最长边 800px" },
-  material: { maxEdge: 600, label: "材料样板贴图", storageNotice: "已压缩至最长边 600px" },
+  product: { maxEdge: 1200, label: "产品彩图", storageNotice: "已压缩至最长边 1200px" },
+  material: { maxEdge: 800, label: "材料样板贴图", storageNotice: "已压缩至最长边 800px" },
 };
 const IMAGE_DB_NAME = "maison-boq-images-v1";
 const IMAGE_STORE_NAME = "images";
 const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，请删除部分图片或清理未使用图片。";
-const PRODUCT_IMAGE_SOURCES = new Set(["uploaded-rendering", "manual-upload", "placeholder"]);
+const PRODUCT_IMAGE_SOURCES = new Set(["ai-generated", "manual-upload", "placeholder"]);
 const PRODUCT_IMAGE_CROPS = {
   full: { label: "智能聚焦单品", className: "crop-full", viewBox: "48 36 224 168", preserveAspectRatio: "xMidYMid slice" },
   topLeft: { label: "聚焦左上单品", className: "crop-top-left", viewBox: "0 0 224 168", preserveAspectRatio: "xMinYMin slice" },
@@ -57,6 +57,7 @@ const PRODUCT_LIGHTBOX_ZOOM_STEP = 0.25;
 const PRODUCT_LIGHTBOX_MIN_ZOOM = 0.5;
 const PRODUCT_LIGHTBOX_MAX_ZOOM = 3;
 let productLightboxZoom = 1;
+let materialSwatchZoom = 1;
 
 const defaultProject = () => ({
   id: createId(),
@@ -521,7 +522,7 @@ const deliveryModes = {
   client: {
     title: "客户汇报版",
     description: "隐藏供应商、内部备注、采购成本，适合客户评审与方案汇报。",
-    fields: ["空间", "品类", "软装产品彩图", "材料样板贴图", "尺寸材质", "预算小计", "状态"],
+    fields: ["空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "材质建议", "预算小计", "客户版备注"],
   },
   internal: {
     title: "内部采购版",
@@ -687,6 +688,9 @@ const elements = {
   materialSwatchType: document.querySelector("#materialSwatchType"),
   materialSwatchProduct: document.querySelector("#materialSwatchProduct"),
   materialSwatchNote: document.querySelector("#materialSwatchNote"),
+  materialSwatchZoomInBtn: document.querySelector("#materialSwatchZoomInBtn"),
+  materialSwatchZoomOutBtn: document.querySelector("#materialSwatchZoomOutBtn"),
+  materialSwatchZoomResetBtn: document.querySelector("#materialSwatchZoomResetBtn"),
   closeSuggestionBtn: document.querySelector("#closeSuggestionBtn"),
   toast: document.querySelector("#toast"),
 };
@@ -1079,7 +1083,8 @@ function normalizeItem(item = {}, index = 0, projectStyle = "雅奢") {
 
 function inferProductImageSource(item = {}) {
   if (PRODUCT_IMAGE_SOURCES.has(item.productImageSource)) return item.productImageSource;
-  if (item.productImageUploaded || item.productImageStorageKey || (item.productImage && !isPlaceholderImage(item.productImage))) return "manual-upload";
+  if (item.productImageUploaded || item.productImageStorageKey || (item.productImage && !isPlaceholderImage(item.productImage) && !item.productImageSource)) return "manual-upload";
+  if (item.productImageSource === "uploaded-rendering") return "placeholder";
   return "placeholder";
 }
 
@@ -1709,6 +1714,16 @@ function isPlaceholderImage(dataUrl = "") {
   return String(dataUrl).startsWith("data:image/svg+xml") && String(dataUrl).includes("boq-placeholder");
 }
 
+function generateIsolatedProductImage(product = {}, referenceImages = []) {
+  // AI 接口预留：后续可根据 referenceImages 识别并生成真实单品白底图；静态版返回风格化单品白底占位图。
+  return createProductPlaceholderImage(product.category || product.productName || product.name || "软装", product.style || getProjectStyle(state || {}));
+}
+
+function extractProductFromRendering(product = {}, uploadedRenderings = []) {
+  // AI 接口预留：后续可从效果图 / 软装方案中裁切单品并抠成白底图；当前不直接展示整张空间图。
+  return generateIsolatedProductImage(product, uploadedRenderings);
+}
+
 function createProductPlaceholderImage(category = "软装", style = "雅奢") {
   const palette = getPlaceholderPalette(style);
   const shape = getPlaceholderShape(category);
@@ -1868,8 +1883,8 @@ function buildGeneratedProductImageFields(category, style, index = 0) {
   const rendering = getRenderingForItem(index);
   if (rendering) {
     return {
-      productImage: rendering.id,
-      productImageSource: "uploaded-rendering",
+      productImage: createProductPlaceholderImage(category, style),
+      productImageSource: "placeholder",
       productImageCrop: null,
       productImageUploaded: false,
     };
@@ -1995,10 +2010,14 @@ function generateItemsForSpaceAndStyle(space, style) {
 }
 
 function assignRenderingImagesToGeneratedItems(items = []) {
-  const renderings = getAvailableRenderings();
-  if (!renderings.length) return items;
-  items.forEach((item, index) => assignRenderingImageToItem(item, index, null, renderings[index % renderings.length].id));
-  return items;
+  return items.map((item) => ({
+    ...item,
+    productImage: generateIsolatedProductImage(item, getAvailableRenderings()),
+    productImageSource: "placeholder",
+    productImageCrop: null,
+    productImageUploaded: false,
+    materialSwatches: buildSwatchPreviewData(item),
+  }));
 }
 
 function replaceItemsForSpaces(generatedItems, replaceSpaces) {
@@ -2481,14 +2500,14 @@ function promptItemImageUpload(item, kind) {
         item.productImageUploaded = true;
         item.productImageStorageKey = images[0].storageKey;
         item.productImageStorage = "indexedDB";
-        showToast("已上传/替换真实软装产品彩图，产品彩图已压缩至最长边 800px");
+        showToast("已上传/替换真实软装产品白底图，产品彩图已压缩至最长边 1200px");
       } else {
         const existing = normalizeMaterialSampleImages(item.materialSampleImages);
         item.materialSampleImages = [...existing, ...images].slice(0, 4);
         const uploadedSwatches = images.map((image) => materialSampleToSwatch(image, item));
         const generatedSwatches = normalizeMaterialSwatches(item.materialSwatches, item, getProjectStyle(state)).filter((swatch) => swatch.source !== "manual-upload");
         item.materialSwatches = [...uploadedSwatches, ...generatedSwatches].slice(0, 4);
-        showToast(`已上传 ${Math.min(images.length, 4)} 张材料样板贴图，已压缩至最长边 600px`);
+        showToast(`已上传 ${Math.min(images.length, 4)} 张材料样板贴图，已压缩至最长边 800px`);
       }
       saveState();
       render();
@@ -2515,18 +2534,11 @@ function removeProductImage(item) {
 
 function assignRenderingImageToItem(item, index = 0, crop = null, renderingId = "") {
   const rendering = renderingId ? getRenderingByReference(renderingId) : getRenderingForItem(index);
-  if (rendering) {
-    item.productImage = rendering.id;
-    item.productImageSource = "uploaded-rendering";
-    item.productImageCrop = normalizeProductImageCrop(crop);
-    item.productImageUploaded = false;
-    return true;
-  }
-  item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
-  item.productImageSource = "placeholder";
-  item.productImageCrop = null;
+  item.productImage = extractProductFromRendering(item, rendering ? [rendering] : getAvailableRenderings());
+  item.productImageSource = "ai-generated";
+  item.productImageCrop = normalizeProductImageCrop(crop);
   item.productImageUploaded = false;
-  return false;
+  return Boolean(rendering);
 }
 
 function openRenderingPicker(item) {
@@ -2581,6 +2593,11 @@ function openProductImageLightbox(item, title = "") {
 function setProductLightboxZoom(nextZoom) {
   productLightboxZoom = Math.min(PRODUCT_LIGHTBOX_MAX_ZOOM, Math.max(PRODUCT_LIGHTBOX_MIN_ZOOM, nextZoom));
   if (elements.productLightboxImage) elements.productLightboxImage.style.transform = `scale(${productLightboxZoom})`;
+}
+
+function setMaterialSwatchZoom(nextZoom) {
+  materialSwatchZoom = Math.min(PRODUCT_LIGHTBOX_MAX_ZOOM, Math.max(PRODUCT_LIGHTBOX_MIN_ZOOM, nextZoom));
+  if (elements.materialSwatchImage) elements.materialSwatchImage.style.transform = `scale(${materialSwatchZoom})`;
 }
 
 function closeProductImageLightbox() {
@@ -2664,7 +2681,7 @@ function render() {
 
   elements.tableBody.innerHTML = visibleItems.length
     ? visibleItems.map(renderRow).join("")
-    : '<tr><td colspan="13" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
+    : '<tr><td colspan="15" class="empty-cell">暂无匹配产品，请清除筛选或新增产品。</td></tr>';
 
   updateBudgetSummary();
   renderTemplateLibrary();
@@ -2722,15 +2739,19 @@ function renderRow(item) {
       <td>${renderProductImageCell(item, productImage, safeId, productName)}</td>
       <td>${renderMaterialSwatchesCell(materialSwatches, safeId)}</td>
       <td>${escapeHtml(size)}</td>
-      <td><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /></td>
+      <td><div class="quantity-input-group"><input class="inline-number" type="text" inputmode="decimal" value="${escapeHtml(item.quantity)}" data-action="quantity" data-id="${safeId}" aria-label="调整数量" /><span>${escapeHtml(item.unit || "件")}</span></div></td>
       <td class="material-cell">${escapeHtml(materialSuggestion)}</td>
       <td class="money customer-hidden"><input class="inline-price" type="text" inputmode="decimal" value="${escapeHtml(item.unitPrice)}" data-action="unitPrice" data-id="${safeId}" aria-label="调整单价" /></td>
       <td class="customer-hidden">${escapeHtml(item.supplier)}</td>
       <td class="money" data-subtotal-cell>${money(subtotal(item))}</td>
-      <td class="internal-only"><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
+      <td class="pdf-client-hidden"><span class="status ${statusClass(item.status)}">${escapeHtml(item.status)}</span></td>
+      <td class="client-note-cell">${escapeHtml(item.clientNote || item.note || "以最终选样、现场复尺及客户确认为准。")}</td>
+      <td class="visibility-cell pdf-client-hidden"><button type="button" class="visibility-toggle no-print" data-action="toggle-client-visible" data-id="${safeId}">${clientVisible ? "是" : "否"}</button><span class="print-only">${clientVisible ? "是" : "否"}</span></td>
       <td class="actions-col row-actions internal-only">
         <button type="button" class="mini-button" data-action="edit" data-id="${safeId}">编辑</button>
         <button type="button" class="mini-button danger" data-action="delete" data-id="${safeId}">删除</button>
+        <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传产品图</button>
+        <button type="button" class="mini-button" data-action="upload-material-sample" data-id="${safeId}">上传样板图</button>
       </td>
     </tr>`;
 }
@@ -2754,15 +2775,12 @@ function renderProductImageCell(item, productImage, safeId, productName = "") {
 
 function resolveProductImage(item) {
   if (item.productImageSource === "manual-upload" && item.productImage) return item.productImage;
+  if (item.productImageSource === "ai-generated" && item.productImage) return item.productImage;
   if (item.productImageSource === "uploaded-rendering") {
-    const rendering = getRenderingByReference(item.productImage) || getRenderingForItem(getItemIndex(item));
-    if (rendering?.dataUrl) return createIsolatedProductImageFromRendering(rendering, item, normalizeProductImageCrop(item.productImageCrop));
-    if (rendering?.storageKey && !rendering.dataUrl) return createRenderingPendingImage(item.category);
+    item.productImageSource = "placeholder";
+    item.productImageCrop = null;
   }
-  item.productImageSource = item.productImageSource === "manual-upload" ? "manual-upload" : "placeholder";
-  return item.productImage && item.productImageSource === "placeholder" && !isPlaceholderImage(item.productImage)
-    ? item.productImage
-    : createProductPlaceholderImage(item.category, getProjectStyle(state));
+  return generateIsolatedProductImage(item, getAvailableRenderings());
 }
 
 function getRenderingByReference(reference) {
@@ -2784,23 +2802,22 @@ function getProductImageSourceClassName(item) {
 }
 
 function getProductImageSourceMeta(item) {
-  if (item.productImageSource === "manual-upload") {
-    return { label: "手动上传", description: "已上传真实产品图", className: "source-manual" };
-  }
-  if (item.productImageSource === "uploaded-rendering") {
-    return { label: "来自效果图 / 软装方案", description: "来自效果图 / 软装方案", className: "source-rendering" };
-  }
-  return { label: "风格占位图", description: "默认风格化占位图", className: "source-placeholder" };
+  if (item.productImageSource === "manual-upload") return { label: "手动上传", description: "", className: "source-manual" };
+  if (item.productImageSource === "ai-generated") return { label: "AI 单品图", description: "", className: "source-ai" };
+  return { label: "风格占位图", description: "", className: "source-placeholder" };
 }
 
 
 function renderMaterialSwatchesCell(swatches, safeId) {
   const displaySwatches = swatches.length ? swatches.slice(0, 4) : generateMaterialSwatchesFromProduct({ category: "软装", productName: "默认材料", materialSuggestion: "米白织物、浅金属", style: getProjectStyle(state) });
   const thumbs = displaySwatches.map((swatch) => `
-    <button type="button" class="material-swatch-thumb ${swatch.source === "placeholder" ? "is-placeholder" : ""}" data-action="preview-material-swatch" data-id="${safeId}" data-swatch-id="${escapeHtml(swatch.id)}" aria-label="预览${escapeHtml(swatch.name)}材料样板">
-      <img src="${escapeHtml(swatch.image || swatch.dataUrl || createMaterialSwatchImage(swatch))}" alt="${escapeHtml(swatch.name)}" loading="lazy" />
-      <span>${escapeHtml(swatch.shortLabel || swatch.name)}</span>
-    </button>`).join("");
+    <span class="material-swatch-wrap">
+      <button type="button" class="material-swatch-thumb ${swatch.source === "placeholder" ? "is-placeholder" : ""}" data-action="preview-material-swatch" data-id="${safeId}" data-swatch-id="${escapeHtml(swatch.id)}" aria-label="预览${escapeHtml(swatch.name)}材料样板">
+        <img src="${escapeHtml(swatch.image || swatch.dataUrl || createMaterialSwatchImage(swatch))}" alt="${escapeHtml(swatch.name)}" loading="lazy" />
+        <span>${escapeHtml(swatch.shortLabel || swatch.name)}</span>
+      </button>
+      ${swatch.source === "manual-upload" ? `<button type="button" class="sample-remove no-print" data-action="remove-material-sample" data-id="${safeId}" data-sample-id="${escapeHtml(swatch.id)}" aria-label="删除材料样板">×</button>` : ""}
+    </span>`).join("");
   return `
     <div class="material-swatch-cell">
       <div class="material-swatch-strip">${thumbs}</div>
@@ -2822,14 +2839,19 @@ function openMaterialSwatchPreview(item, swatchId) {
   elements.materialSwatchType.textContent = swatch.category || getMaterialTypeName(swatch.type);
   elements.materialSwatchProduct.textContent = swatch.productName || item.productName || item.name || item.category;
   elements.materialSwatchNote.textContent = swatch.note || "后续可通过 AI 图像识别自动补充材料用途与色彩倾向。";
+  setMaterialSwatchZoom(1);
   elements.materialSwatchDialog.showModal();
 }
 
 function statusClass(status) {
   return {
     客户已确认: "confirmed",
+    已确认: "confirmed",
+    已下单: "confirmed",
+    已完成: "confirmed",
     待确认: "pending",
     采购询价中: "pending",
+    待下单: "review",
     需复核尺寸: "review",
     备选推荐: "option",
   }[status] || "pending";
@@ -3091,15 +3113,15 @@ function exportCsv() {
   renumberItems(state.items);
   const isClientReport = exportMode !== "internal";
   const headers = isClientReport
-    ? ["编号", "空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "数量", "材质建议", "预算小计", "状态"]
+    ? ["编号", "空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "数量", "材质建议", "预算小计", "客户版备注"]
     : ["编号", "空间", "品类", "软装产品彩图", "材料样板贴图", "常见尺寸", "数量", "材质建议", "执行单价", "供应商", "预算小计", "状态", "是否客户可见"];
   const rows = state.items.filter((item) => !isClientReport || (item.clientVisible ?? item.customerVisible) !== false).map((item, index) => {
-    const productImageStatus = getProductImageSourceMeta(item).description;
+    const productImageStatus = getProductImageSourceMeta(item).label || "白底单品图";
     const swatches = buildSwatchPreviewData(item);
     const sampleStatus = swatches.map((swatch) => swatch.name).join(" / ") || "默认样板";
     const common = [formatItemCode(index), item.space, item.category, `${productImageStatus}：${item.productName || item.name}`, sampleStatus, item.size || extractSizeFromLegacySpec(item.spec), item.quantity, item.materialSuggestion || item.priceRange || extractMaterialSuggestionFromLegacySpec(item.spec)];
     return isClientReport
-      ? [...common, subtotal(item), item.status]
+      ? [...common, subtotal(item), item.clientNote || customerNote(item)]
       : [...common, item.unitPrice, item.supplier, subtotal(item), item.status, (item.clientVisible ?? item.customerVisible) === false ? "否" : "是"];
   });
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
@@ -3283,6 +3305,13 @@ function setupEventBindings() {
     if (button.dataset.action === "upload-material-sample") return promptItemImageUpload(item, "material");
     if (button.dataset.action === "remove-material-sample") return removeMaterialSample(item, button.dataset.sampleId);
     if (button.dataset.action === "preview-material-swatch") return openMaterialSwatchPreview(item, button.dataset.swatchId);
+    if (button.dataset.action === "toggle-client-visible") {
+      item.clientVisible = !(item.clientVisible ?? item.customerVisible ?? true);
+      item.customerVisible = item.clientVisible;
+      saveState();
+      render();
+      return showToast(item.clientVisible ? "已设为客户可见" : "已在客户版隐藏");
+    }
     if (button.dataset.action === "edit") openProductDialog(item);
     if (button.dataset.action === "delete" && window.confirm(`确认删除“${item.name}”？`)) {
       state.items = renumberItems(state.items.filter((entry) => entry.id !== item.id));
@@ -3460,6 +3489,9 @@ function setupEventBindings() {
     if (isBackdropClick) closeProductImageLightbox();
   });
   safeClick(elements.closeMaterialSwatchBtn, () => elements.materialSwatchDialog?.close());
+  safeClick(elements.materialSwatchZoomInBtn, () => setMaterialSwatchZoom(materialSwatchZoom + PRODUCT_LIGHTBOX_ZOOM_STEP));
+  safeClick(elements.materialSwatchZoomOutBtn, () => setMaterialSwatchZoom(materialSwatchZoom - PRODUCT_LIGHTBOX_ZOOM_STEP));
+  safeClick(elements.materialSwatchZoomResetBtn, () => setMaterialSwatchZoom(1));
   safeClick(elements.materialSwatchDialog, (event) => {
     const rect = elements.materialSwatchDialog.getBoundingClientRect();
     const isBackdropClick = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;

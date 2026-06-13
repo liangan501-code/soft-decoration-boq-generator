@@ -35,8 +35,8 @@ test("image persistence falls back to IndexedDB when localStorage cannot hold pr
 
 test("image storage management exposes compression limits and cleanup actions", () => {
   assert.match(app, /floorPlans: \{ maxEdge: 1200/);
-  assert.match(app, /product: \{ maxEdge: 800/);
-  assert.match(app, /material: \{ maxEdge: 600/);
+  assert.match(app, /product: \{ maxEdge: 1200/);
+  assert.match(app, /material: \{ maxEdge: 800/);
   assert.match(app, /IMAGE_COMPRESSION_QUALITY = 0\.78/);
   assert.match(app, /collectReferencedImageKeys/);
   assert.match(app, /cleanupUnusedImages/);
@@ -86,10 +86,10 @@ test("product image resolution never displays whole scene renderings directly", 
   const generatorSource = app.slice(generatorStart, generatorEnd);
 
   assert.match(resolverSource, /manual-upload/);
-  assert.match(resolverSource, /createIsolatedProductImageFromRendering/);
+  assert.match(resolverSource, /generateIsolatedProductImage/);
   assert.doesNotMatch(resolverSource, /return rendering\.dataUrl/);
   assert.doesNotMatch(resolverSource, /fallback\?\.dataUrl/);
-  assert.match(generatorSource, /productImageSource: "uploaded-rendering"/);
+  assert.match(generatorSource, /productImageSource: "placeholder"/);
 });
 
 test("product image lightbox supports open, close and zoom controls", () => {
