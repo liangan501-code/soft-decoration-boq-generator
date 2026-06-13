@@ -28,8 +28,8 @@ test("startup scans known and keyword-matched legacy storage keys before default
   assert.match(app, /isSampleOnlyWorkspace/);
 });
 
-test("legacy project and item fields migrate to version 6 shape", () => {
-  assert.match(app, /CURRENT_DATA_VERSION = 6/);
+test("legacy project and item fields migrate to version 7 shape", () => {
+  assert.match(app, /CURRENT_DATA_VERSION = 7/);
   assert.match(app, /version: CURRENT_DATA_VERSION/);
   assert.match(app, /projectSubType: projectSubtype/);
   assert.match(app, /floorPlans: normalizeAttachmentList\(project\.floorPlans \|\| project\.attachments\?\.floorPlans\)/);

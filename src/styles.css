@@ -1289,3 +1289,29 @@ td {
 .safe-recovery-mode p { margin: 6px 0; color: #5d5046; font-weight: 800; line-height: 1.6; }
 .safe-recovery-error { color: #9a3a2d !important; }
 .safe-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+
+.quantity-input-group { display: inline-flex; align-items: center; gap: 6px; }
+.quantity-input-group span { color: #766b5c; font-size: 12px; font-weight: 900; }
+.client-note-cell { min-width: 220px; max-width: 280px; color: #665d50; font-weight: 700; line-height: 1.55; }
+.visibility-cell { text-align: center; }
+.visibility-toggle { min-width: 44px; border: 1px solid rgba(164,127,64,.24); border-radius: 999px; padding: 8px 12px; color: #6b4b1d; background: #fffaf1; font-weight: 900; cursor: pointer; }
+.print-only { display: none; }
+.material-swatch-wrap { position: relative; display: inline-flex; }
+.material-swatch-wrap .sample-remove { top: -8px; right: -8px; }
+.product-lightbox-image, .material-swatch-large { transform-origin: center; transition: transform .18s ease; }
+.printing-client .customer-hidden,
+.printing-client .internal-only,
+.printing-client .visibility-cell,
+.printing-client .pdf-client-hidden,
+.printing-client .status { display: none !important; }
+.printing-client body,
+.printing-client .panel { background: #fffaf1; }
+@media print {
+  body { background: #fffaf1; }
+  .print-only { display: inline; }
+  .visibility-toggle { display: none !important; }
+  .client-note-cell { max-width: 180px; }
+  .product-image-card { height: 96px; }
+  .boq-product-image { object-fit: contain !important; }
+  .material-swatch-strip { box-shadow: none; background: #fffaf1; }
+}

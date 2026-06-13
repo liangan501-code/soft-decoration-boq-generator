@@ -187,7 +187,7 @@
                   <button class="mini-button" type="button" id="uploadRestoreSamplesBtn">恢复示例数据</button>
                 </div>
               </div>
-              <p class="upload-size-hint">建议上传：平面图 / 尺寸图单张不超过 5MB；效果图 / 软装方案单张不超过 8MB；产品彩图单张不超过 3MB；材料样板贴图单张不超过 2MB。若图片过大，系统会先自动压缩后再保存。</p>
+              <p class="upload-size-hint">建议上传：平面图 / 尺寸图单张不超过 5MB；效果图 / 软装方案单张不超过 8MB；产品彩图单张不超过 3MB（最长边 1200px）；材料样板贴图单张不超过 2MB（最长边 800px）。若图片过大，系统会先自动压缩后再保存。</p>
               <p class="upload-requirement" id="uploadRequirementText">请先上传平面图和效果图 / 软装方案，系统需要根据图纸与空间效果生成清单。</p>
               <p class="upload-reference-note">当前静态版本会优先使用上传的效果图 / 软装方案作为产品参考图。若需要精准识别并裁切具体沙发、灯具、地毯等单品，后续可接入 AI 图像识别接口。</p>
             </section>
@@ -332,7 +332,9 @@
                     <th class="customer-hidden">执行单价</th>
                     <th class="customer-hidden">供应商</th>
                     <th>预算小计</th>
-                    <th class="internal-only">状态</th>
+                    <th class="pdf-client-hidden">状态</th>
+                    <th>客户版备注</th>
+                    <th class="pdf-client-hidden">是否客户可见</th>
                     <th class="actions-col internal-only">操作</th>
                   </tr>
                 </thead>
@@ -459,7 +461,12 @@
           <p class="eyebrow">Material Preview</p>
           <h3 id="materialSwatchTitle">材料样板贴图</h3>
         </div>
-        <button type="button" class="icon-button" id="closeMaterialSwatchBtn" aria-label="关闭材料样板预览">×</button>
+        <div class="product-lightbox-actions">
+          <button type="button" class="mini-button" id="materialSwatchZoomOutBtn">缩小</button>
+          <button type="button" class="mini-button" id="materialSwatchZoomResetBtn">适应屏幕</button>
+          <button type="button" class="mini-button" id="materialSwatchZoomInBtn">放大</button>
+          <button type="button" class="icon-button" id="closeMaterialSwatchBtn" aria-label="关闭材料样板预览">×</button>
+        </div>
       </div>
       <div class="swatch-preview-layout">
         <img id="materialSwatchImage" class="material-swatch-large" src="" alt="材料样板大图" />
