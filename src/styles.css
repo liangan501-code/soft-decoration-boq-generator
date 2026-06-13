@@ -321,10 +321,34 @@ h1 { margin: 0; font-size: 32px; letter-spacing: -.04em; }
 .panel-header.compact { align-items: start; }
 .table-wrap { overflow: auto; border-radius: 22px; border: 1px solid rgba(48, 50, 44, .08); }
 table { width: 100%; min-width: 1220px; border-collapse: collapse; background: #fffdf8; }
+.boq-table { table-layout: fixed; min-width: 1680px; }
+.boq-table .col-code { width: 72px; }
+.boq-table .col-space { width: 92px; }
+.boq-table .col-category { width: 96px; }
+.boq-table .col-product-image { width: 210px; }
+.boq-table .col-sample-board { width: 198px; }
+.boq-table .col-size { width: 156px; }
+.boq-table .col-quantity { width: 94px; }
+.boq-table .col-material { width: 206px; }
+.boq-table .col-unit-price { width: 128px; }
+.boq-table .col-supplier { width: 154px; }
+.boq-table .col-subtotal { width: 132px; }
+.boq-table .col-status { width: 120px; }
+.boq-table .col-actions { width: 142px; }
 th {
-  padding: 15px 14px; text-align: left;
+  height: 64px; padding: 0; text-align: center; vertical-align: middle;
   color: #74634a; background: #f2e9d9;
-  font-size: 13px; letter-spacing: .04em;
+  font-size: 13px; letter-spacing: .04em; line-height: 1.3;
+}
+th .th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 64px;
+  padding: 0 14px;
+  text-align: center;
+  line-height: 1.3;
 }
 td {
   padding: 16px 14px;
@@ -1064,6 +1088,7 @@ td {
 }
 .sample-thumb-wrap:hover .sample-preview { display: block; }
 .client-mode .customer-hidden, .client-mode .internal-only { display: none; }
+.client-mode col.customer-hidden, .client-mode col.internal-only { display: none; visibility: collapse; }
 .client-mode table { min-width: 1320px; }
 @media print {
   .internal-only, .no-print { display: none !important; }
