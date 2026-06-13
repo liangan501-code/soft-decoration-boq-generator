@@ -1206,8 +1206,7 @@ function isPlaceholderImage(dataUrl = "") {
 function createProductPlaceholderImage(category = "软装", style = "雅奢") {
   const palette = getPlaceholderPalette(style);
   const shape = getPlaceholderShape(category);
-  const title = escapeXml(category || "软装产品");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="220" viewBox="0 0 320 220" role="img" aria-label="${title}占位图"><defs><linearGradient id="boq-placeholder-bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="${palette.bg1}"/><stop offset="1" stop-color="${palette.bg2}"/></linearGradient><pattern id="boq-placeholder-texture" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M0 18L18 0" stroke="${palette.line}" stroke-opacity=".16" stroke-width="1"/></pattern></defs><rect width="320" height="220" rx="28" fill="url(#boq-placeholder-bg)"/><rect width="320" height="220" rx="28" fill="url(#boq-placeholder-texture)"/><circle cx="268" cy="42" r="34" fill="${palette.accent}" opacity=".22"/><g fill="none" stroke="${palette.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".88">${shape}</g><text x="24" y="190" fill="${palette.ink}" font-family="Arial, sans-serif" font-size="20" font-weight="700">${title}</text><text x="24" y="34" fill="${palette.accent}" font-family="Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">BOQ IMAGE</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="软装产品占位图"><defs><linearGradient id="boq-placeholder-bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="${palette.bg1}"/><stop offset="1" stop-color="${palette.bg2}"/></linearGradient><pattern id="boq-placeholder-texture" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M0 18L18 0" stroke="${palette.line}" stroke-opacity=".16" stroke-width="1"/></pattern></defs><rect width="320" height="240" rx="28" fill="url(#boq-placeholder-bg)"/><rect width="320" height="240" rx="28" fill="url(#boq-placeholder-texture)"/><circle cx="268" cy="42" r="34" fill="${palette.accent}" opacity=".22"/><circle cx="52" cy="198" r="46" fill="#fffaf1" opacity=".18"/><g transform="translate(0 10)" fill="none" stroke="${palette.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".88">${shape}</g></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -2192,21 +2191,19 @@ function renderRow(item) {
 }
 
 function renderProductImageCell(item, productImage, safeId) {
-  const sourceMeta = getProductImageSourceMeta(item);
+  const sourceClassName = getProductImageSourceClassName(item);
   const cropMeta = PRODUCT_IMAGE_CROPS[item.productImageCrop?.type || "full"] || PRODUCT_IMAGE_CROPS.full;
+  const fallbackImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
   return `
-    <div class="product-image-cell ${sourceMeta.className}">
+    <div class="product-image-cell ${sourceClassName}">
       <div class="product-image-card">
-        <img class="boq-product-image ${cropMeta.className}" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" />
-        <span class="product-category-badge">${escapeHtml(item.category)}</span>
-        <span class="product-source-badge">${escapeHtml(sourceMeta.label)}</span>
+        <img class="boq-product-image ${cropMeta.className}" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(fallbackImage)}';" />
       </div>
       <div class="image-actions no-print">
         <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传 / 替换</button>
         <button type="button" class="mini-button" data-action="pick-rendering-image" data-id="${safeId}">从方案图选择</button>
         <button type="button" class="mini-button danger" data-action="remove-product-image" data-id="${safeId}">删除</button>
       </div>
-      <small>${escapeHtml(sourceMeta.description)}${item.productImageCrop?.type ? ` · ${escapeHtml(cropMeta.label)}` : ""}</small>
     </div>`;
 }
 
@@ -2240,9 +2237,12 @@ function getItemIndex(item) {
 }
 
 function createRenderingPendingImage(category = "软装") {
-  const title = escapeXml(category || "软装产品");
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240"><rect width="320" height="240" rx="26" fill="#f6efe2"/><text x="28" y="112" fill="#a47f40" font-family="Arial, sans-serif" font-size="16" font-weight="700">${title}</text><text x="28" y="144" fill="#6f7765" font-family="Arial, sans-serif" font-size="13" font-weight="700">效果图预览加载中</text></svg>`;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  return createProductPlaceholderImage(category, getProjectStyle(state));
+}
+
+
+function getProductImageSourceClassName(item) {
+  return getProductImageSourceMeta(item).className;
 }
 
 function getProductImageSourceMeta(item) {
