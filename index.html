@@ -426,13 +426,31 @@
     <dialog id="renderingPickerDialog" class="rendering-picker-dialog">
       <div class="dialog-header">
         <div>
-          <h3>从方案图选择产品图</h3>
-          <p>选择已上传效果图 / 软装方案，并指定第一版参考裁剪区域。</p>
+          <h3>从方案图选择单品图</h3>
+          <p>选择已上传效果图 / 软装方案，并聚焦到当前清单项对应的单品区域。</p>
         </div>
         <button type="button" class="icon-button" id="closeRenderingPickerBtn" aria-label="关闭">×</button>
       </div>
-      <p class="dialog-note">当前静态版本使用整张或区域缩略预览；后续可升级为 AI 识别具体单品并精确框选裁剪。</p>
+      <p class="dialog-note">系统会把选定区域处理为白底单品参考图，不再把整张空间场景作为最终产品彩图。</p>
       <div class="rendering-picker-grid" id="renderingPickerGrid" aria-label="已上传效果图 / 软装方案图列表"></div>
+    </dialog>
+
+    <dialog id="productImageLightbox" class="product-lightbox" aria-labelledby="productLightboxTitle">
+      <div class="product-lightbox-toolbar">
+        <div>
+          <p class="eyebrow">Product Preview</p>
+          <h3 id="productLightboxTitle">软装产品彩图</h3>
+        </div>
+        <div class="product-lightbox-actions">
+          <button type="button" class="mini-button" id="productZoomOutBtn">缩小</button>
+          <button type="button" class="mini-button" id="productZoomResetBtn">适应屏幕</button>
+          <button type="button" class="mini-button" id="productZoomInBtn">放大</button>
+          <button type="button" class="icon-button" id="closeProductLightboxBtn" aria-label="关闭产品大图预览">×</button>
+        </div>
+      </div>
+      <div class="product-lightbox-stage" id="productLightboxStage">
+        <img id="productLightboxImage" class="product-lightbox-image" src="" alt="软装产品高清大图" />
+      </div>
     </dialog>
 
     <dialog id="materialSwatchDialog" class="material-swatch-dialog" aria-labelledby="materialSwatchTitle">

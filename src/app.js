@@ -48,11 +48,15 @@ const IMAGE_STORE_NAME = "images";
 const STORAGE_WARNING_MESSAGE = "浏览器存储空间不足，请删除部分图片或清理未使用图片。";
 const PRODUCT_IMAGE_SOURCES = new Set(["uploaded-rendering", "manual-upload", "placeholder"]);
 const PRODUCT_IMAGE_CROPS = {
-  full: { label: "使用整张方案图", className: "crop-full" },
-  topLeft: { label: "使用左上区域", className: "crop-top-left" },
-  center: { label: "使用中间区域", className: "crop-center" },
-  bottomRight: { label: "使用右下区域", className: "crop-bottom-right" },
+  full: { label: "智能聚焦单品", className: "crop-full", viewBox: "48 36 224 168", preserveAspectRatio: "xMidYMid slice" },
+  topLeft: { label: "聚焦左上单品", className: "crop-top-left", viewBox: "0 0 224 168", preserveAspectRatio: "xMinYMin slice" },
+  center: { label: "聚焦中间单品", className: "crop-center", viewBox: "48 36 224 168", preserveAspectRatio: "xMidYMid slice" },
+  bottomRight: { label: "聚焦右下单品", className: "crop-bottom-right", viewBox: "96 72 224 168", preserveAspectRatio: "xMaxYMax slice" },
 };
+const PRODUCT_LIGHTBOX_ZOOM_STEP = 0.25;
+const PRODUCT_LIGHTBOX_MIN_ZOOM = 0.5;
+const PRODUCT_LIGHTBOX_MAX_ZOOM = 3;
+let productLightboxZoom = 1;
 
 const defaultProject = () => ({
   id: createId(),
@@ -668,6 +672,14 @@ const elements = {
   renderingPickerDialog: document.querySelector("#renderingPickerDialog"),
   renderingPickerGrid: document.querySelector("#renderingPickerGrid"),
   closeRenderingPickerBtn: document.querySelector("#closeRenderingPickerBtn"),
+  productImageLightbox: document.querySelector("#productImageLightbox"),
+  productLightboxTitle: document.querySelector("#productLightboxTitle"),
+  productLightboxImage: document.querySelector("#productLightboxImage"),
+  productLightboxStage: document.querySelector("#productLightboxStage"),
+  closeProductLightboxBtn: document.querySelector("#closeProductLightboxBtn"),
+  productZoomInBtn: document.querySelector("#productZoomInBtn"),
+  productZoomOutBtn: document.querySelector("#productZoomOutBtn"),
+  productZoomResetBtn: document.querySelector("#productZoomResetBtn"),
   materialSwatchDialog: document.querySelector("#materialSwatchDialog"),
   closeMaterialSwatchBtn: document.querySelector("#closeMaterialSwatchBtn"),
   materialSwatchImage: document.querySelector("#materialSwatchImage"),
@@ -1700,7 +1712,17 @@ function isPlaceholderImage(dataUrl = "") {
 function createProductPlaceholderImage(category = "软装", style = "雅奢") {
   const palette = getPlaceholderPalette(style);
   const shape = getPlaceholderShape(category);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="软装产品占位图"><defs><linearGradient id="boq-placeholder-bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="${palette.bg1}"/><stop offset="1" stop-color="${palette.bg2}"/></linearGradient><pattern id="boq-placeholder-texture" width="18" height="18" patternUnits="userSpaceOnUse"><path d="M0 18L18 0" stroke="${palette.line}" stroke-opacity=".16" stroke-width="1"/></pattern></defs><rect width="320" height="240" rx="28" fill="url(#boq-placeholder-bg)"/><rect width="320" height="240" rx="28" fill="url(#boq-placeholder-texture)"/><circle cx="268" cy="42" r="34" fill="${palette.accent}" opacity=".22"/><circle cx="52" cy="198" r="46" fill="#fffaf1" opacity=".18"/><g transform="translate(0 10)" fill="none" stroke="${palette.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".88">${shape}</g></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 320 320" role="img" aria-label="软装产品白底占位图"><defs><filter id="boq-placeholder-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#2f2a22" flood-opacity=".12"/></filter></defs><rect class="boq-placeholder" width="320" height="320" rx="30" fill="#fff"/><rect x="16" y="16" width="288" height="288" rx="26" fill="#fbfaf7" stroke="#ede7dc"/><ellipse cx="160" cy="252" rx="86" ry="13" fill="#2f2a22" opacity=".08"/><g transform="translate(0 38)" fill="none" stroke="${palette.ink}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity=".9" filter="url(#boq-placeholder-shadow)">${shape}</g></svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function createIsolatedProductImageFromRendering(rendering, item, crop = null) {
+  if (!rendering?.dataUrl) return createProductPlaceholderImage(item.category, getProjectStyle(state));
+  const cropMeta = PRODUCT_IMAGE_CROPS[crop?.type || "full"] || PRODUCT_IMAGE_CROPS.full;
+  const [x, y, width, height] = cropMeta.viewBox.split(" ").map(Number);
+  const safeHref = escapeXml(rendering.dataUrl);
+  const safeCategory = escapeXml(item.category || "软装产品");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800" role="img" aria-label="${safeCategory}白底单品参考图"><defs><clipPath id="boq-extract-clip"><rect x="96" y="96" width="608" height="608" rx="42"/></clipPath><filter id="boq-extract-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#2f2a22" flood-opacity=".16"/></filter></defs><rect class="boq-isolated-product" width="800" height="800" rx="48" fill="#fff"/><rect x="56" y="56" width="688" height="688" rx="44" fill="#fbfaf7" stroke="#ebe4d8"/><g clip-path="url(#boq-extract-clip)" filter="url(#boq-extract-shadow)"><svg x="96" y="96" width="608" height="608" viewBox="${x} ${y} ${width} ${height}" preserveAspectRatio="${cropMeta.preserveAspectRatio}"><image href="${safeHref}" x="0" y="0" width="320" height="240" preserveAspectRatio="${cropMeta.preserveAspectRatio}"/></svg></g><rect x="96" y="96" width="608" height="608" rx="42" fill="none" stroke="#f0eadf" stroke-width="2"/><ellipse cx="400" cy="724" rx="160" ry="16" fill="#302b24" opacity=".07"/></svg>`;
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
@@ -2480,13 +2502,15 @@ function promptItemImageUpload(item, kind) {
 
 function removeProductImage(item) {
   if (item.productImageStorageKey && item.productImageSource === "manual-upload") deleteImageFromIndexedDb(item.productImageStorageKey).catch((error) => console.warn("删除产品图 IndexedDB 失败", error));
+  item.productImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
+  item.productImageSource = "placeholder";
+  item.productImageCrop = null;
   item.productImageUploaded = false;
   item.productImageStorageKey = "";
   item.productImageStorage = "localStorage";
-  const restoredFromRendering = assignRenderingImageToItem(item, getItemIndex(item));
   saveState();
   render();
-  showToast(restoredFromRendering ? "已恢复为效果图 / 软装方案参考图" : "已恢复默认产品彩图占位图");
+  showToast("已恢复默认白底单品占位图");
 }
 
 function assignRenderingImageToItem(item, index = 0, crop = null, renderingId = "") {
@@ -2525,7 +2549,7 @@ function renderRenderingPickerCard(item, file) {
     <article class="rendering-picker-card">
       <img src="${escapeHtml(thumb)}" alt="${escapeHtml(file.name)}" />
       <strong>${escapeHtml(file.name)}</strong>
-      <span>来自效果图 / 软装方案</span>
+      <span>选择一个聚焦区域生成白底单品图</span>
       <div class="rendering-crop-actions">${cropButtons}</div>
     </article>`;
 }
@@ -2537,7 +2561,32 @@ function selectRenderingImageForItem(itemId, renderingId, cropType) {
   saveState();
   render();
   elements.renderingPickerDialog.close();
-  showToast("已从方案图选择产品参考图");
+  showToast("已生成白底单品参考图");
+}
+
+function getPreviewProductImage(item) {
+  return resolveProductImage(item);
+}
+
+function openProductImageLightbox(item, title = "") {
+  if (!elements.productImageLightbox || !elements.productLightboxImage) return;
+  const previewImage = getPreviewProductImage(item);
+  elements.productLightboxImage.src = previewImage;
+  elements.productLightboxImage.alt = `${title || item.productName || item.name || item.category || "软装产品"}高清产品图`;
+  if (elements.productLightboxTitle) elements.productLightboxTitle.textContent = title || item.productName || item.name || item.category || "软装产品彩图";
+  setProductLightboxZoom(1);
+  elements.productImageLightbox.showModal();
+}
+
+function setProductLightboxZoom(nextZoom) {
+  productLightboxZoom = Math.min(PRODUCT_LIGHTBOX_MAX_ZOOM, Math.max(PRODUCT_LIGHTBOX_MIN_ZOOM, nextZoom));
+  if (elements.productLightboxImage) elements.productLightboxImage.style.transform = `scale(${productLightboxZoom})`;
+}
+
+function closeProductImageLightbox() {
+  if (!elements.productImageLightbox) return;
+  elements.productImageLightbox.close();
+  if (elements.productLightboxImage) elements.productLightboxImage.src = "";
 }
 
 function removeMaterialSample(item, sampleId) {
@@ -2688,14 +2737,13 @@ function renderRow(item) {
 
 function renderProductImageCell(item, productImage, safeId, productName = "") {
   const sourceClassName = getProductImageSourceClassName(item);
-  const cropMeta = PRODUCT_IMAGE_CROPS[item.productImageCrop?.type || "full"] || PRODUCT_IMAGE_CROPS.full;
   const fallbackImage = createProductPlaceholderImage(item.category, getProjectStyle(state));
+  const previewTitle = escapeHtml(productName || item.category || "软装产品");
   return `
     <div class="product-image-cell ${sourceClassName}">
-      <div class="product-image-card">
-        <img class="boq-product-image ${cropMeta.className}" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(fallbackImage)}';" />
-      </div>
-      <strong class="product-image-title">${escapeHtml(productName || item.category || "软装产品")}</strong>
+      <button type="button" class="product-image-card" data-action="preview-product-image" data-id="${safeId}" data-title="${previewTitle}" aria-label="查看${previewTitle}高清产品图">
+        <img class="boq-product-image" src="${escapeHtml(productImage)}" alt="${escapeHtml(item.category)}软装产品彩图" loading="lazy" onerror="this.onerror=null;this.src='${escapeHtml(fallbackImage)}';" />
+      </button>
       <div class="image-actions no-print">
         <button type="button" class="mini-button" data-action="upload-product-image" data-id="${safeId}">上传 / 替换</button>
         <button type="button" class="mini-button" data-action="pick-rendering-image" data-id="${safeId}">从方案图选择</button>
@@ -2708,15 +2756,8 @@ function resolveProductImage(item) {
   if (item.productImageSource === "manual-upload" && item.productImage) return item.productImage;
   if (item.productImageSource === "uploaded-rendering") {
     const rendering = getRenderingByReference(item.productImage) || getRenderingForItem(getItemIndex(item));
-    if (rendering?.dataUrl) return rendering.dataUrl;
+    if (rendering?.dataUrl) return createIsolatedProductImageFromRendering(rendering, item, normalizeProductImageCrop(item.productImageCrop));
     if (rendering?.storageKey && !rendering.dataUrl) return createRenderingPendingImage(item.category);
-  }
-  const fallback = getRenderingForItem(getItemIndex(item));
-  if (item.productImageSource !== "manual-upload" && fallback?.dataUrl) {
-    item.productImage = fallback.id;
-    item.productImageSource = "uploaded-rendering";
-    item.productImageCrop = item.productImageCrop || null;
-    return fallback.dataUrl;
   }
   item.productImageSource = item.productImageSource === "manual-upload" ? "manual-upload" : "placeholder";
   return item.productImage && item.productImageSource === "placeholder" && !isPlaceholderImage(item.productImage)
@@ -3235,6 +3276,7 @@ function setupEventBindings() {
     if (!button) return;
     const item = state.items.find((entry) => entry.id === button.dataset.id);
     if (!item) return;
+    if (button.dataset.action === "preview-product-image") return openProductImageLightbox(item, button.dataset.title);
     if (button.dataset.action === "upload-product-image") return promptItemImageUpload(item, "product");
     if (button.dataset.action === "remove-product-image") return removeProductImage(item);
     if (button.dataset.action === "pick-rendering-image") return openRenderingPicker(item);
@@ -3403,6 +3445,20 @@ function setupEventBindings() {
   safeClick(elements.showSuggestionsBtn, () => elements.suggestionDialog?.showModal());
   safeClick(elements.closeSuggestionBtn, () => elements.suggestionDialog?.close());
   safeClick(elements.closeRenderingPickerBtn, () => elements.renderingPickerDialog?.close());
+  safeClick(elements.closeProductLightboxBtn, closeProductImageLightbox);
+  safeClick(elements.productZoomInBtn, () => setProductLightboxZoom(productLightboxZoom + PRODUCT_LIGHTBOX_ZOOM_STEP));
+  safeClick(elements.productZoomOutBtn, () => setProductLightboxZoom(productLightboxZoom - PRODUCT_LIGHTBOX_ZOOM_STEP));
+  safeClick(elements.productZoomResetBtn, () => setProductLightboxZoom(1));
+  safeAddEventListener(elements.productLightboxStage, "wheel", (event) => {
+    event.preventDefault();
+    setProductLightboxZoom(productLightboxZoom + (event.deltaY < 0 ? PRODUCT_LIGHTBOX_ZOOM_STEP : -PRODUCT_LIGHTBOX_ZOOM_STEP));
+  }, { passive: false });
+  safeAddEventListener(elements.productLightboxStage, "dblclick", () => setProductLightboxZoom(productLightboxZoom === 1 ? 2 : 1));
+  safeClick(elements.productImageLightbox, (event) => {
+    const rect = elements.productImageLightbox.getBoundingClientRect();
+    const isBackdropClick = event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+    if (isBackdropClick) closeProductImageLightbox();
+  });
   safeClick(elements.closeMaterialSwatchBtn, () => elements.materialSwatchDialog?.close());
   safeClick(elements.materialSwatchDialog, (event) => {
     const rect = elements.materialSwatchDialog.getBoundingClientRect();
