@@ -48,3 +48,29 @@ test("image storage management exposes compression limits and cleanup actions", 
   assert.match(html, /产品彩图单张不超过 3MB/);
   assert.match(html, /材料样板贴图单张不超过 2MB/);
 });
+
+
+test("product image cards render only the image and actions without labels", () => {
+  const cellStart = app.indexOf("function renderProductImageCell");
+  const cellEnd = app.indexOf("function resolveProductImage", cellStart);
+  const cellSource = app.slice(cellStart, cellEnd);
+
+  assert.match(cellSource, /<img class="boq-product-image/);
+  assert.match(cellSource, /data-action="upload-product-image"/);
+  assert.match(cellSource, /data-action="pick-rendering-image"/);
+  assert.match(cellSource, /data-action="remove-product-image"/);
+  assert.match(cellSource, /onerror="this\.onerror=null;this\.src='/);
+  assert.doesNotMatch(cellSource, /product-category-badge|product-source-badge|<small>|sourceMeta\.label|sourceMeta\.description|item\.productName|item\.name/);
+});
+
+test("product image placeholders and pending rendering fallbacks contain no visible text labels", () => {
+  const placeholderStart = app.indexOf("function createProductPlaceholderImage");
+  const placeholderEnd = app.indexOf("function getPlaceholderPalette", placeholderStart);
+  const placeholderSource = app.slice(placeholderStart, placeholderEnd);
+  const pendingStart = app.indexOf("function createRenderingPendingImage");
+  const pendingEnd = app.indexOf("function getProductImageSourceClassName", pendingStart);
+  const pendingSource = app.slice(pendingStart, pendingEnd);
+
+  assert.doesNotMatch(placeholderSource, /<text|BOQ IMAGE|\$\{title\}/);
+  assert.doesNotMatch(pendingSource, /效果图预览加载中|<text|\$\{title\}/);
+});

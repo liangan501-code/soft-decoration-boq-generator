@@ -957,7 +957,7 @@ td {
   letter-spacing: .08em;
   white-space: nowrap;
 }
-.product-image-cell { display: grid; gap: 8px; min-width: 180px; }
+.product-image-cell { display: grid; gap: 8px; min-width: 180px; align-content: start; }
 .product-image-card {
   position: relative;
   width: 168px;
@@ -981,33 +981,7 @@ td {
 .boq-product-image.crop-top-left { object-position: 18% 18%; transform: scale(1.35); }
 .boq-product-image.crop-center { object-position: center; transform: scale(1.35); }
 .boq-product-image.crop-bottom-right { object-position: 82% 82%; transform: scale(1.35); }
-.product-category-badge, .product-source-badge {
-  position: absolute;
-  left: 8px;
-  max-width: calc(100% - 16px);
-  overflow: hidden;
-  border-radius: 999px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 900;
-  box-shadow: 0 8px 18px rgba(31,35,32,.16);
-}
-.product-category-badge {
-  top: 8px;
-  padding: 4px 8px;
-  color: #2d2e28;
-  background: rgba(255, 250, 241, .9);
-}
-.product-source-badge {
-  bottom: 8px;
-  padding: 5px 9px;
-  color: #fffaf1;
-  background: linear-gradient(135deg, rgba(36, 38, 34, .86), rgba(111, 119, 101, .86));
-}
 .source-rendering .product-image-card { border-color: rgba(164, 127, 64, .44); box-shadow: 0 14px 30px rgba(94, 79, 43, .16); }
-.source-manual .product-source-badge { background: linear-gradient(135deg, #6f4f1f, #b28b49); }
-.source-placeholder .product-source-badge { background: rgba(86, 80, 70, .82); }
 .image-actions { display: flex; flex-wrap: wrap; gap: 6px; max-width: 184px; }
 .product-image-cell small, .sample-board-cell small { color: #968b79; font-size: 12px; font-weight: 700; }
 
