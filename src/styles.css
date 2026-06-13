@@ -1220,3 +1220,13 @@ td {
 .legacy-recovery-card p { margin: 4px 0; color: #6d6255; font-weight: 800; }
 .legacy-recovery-card ul { margin: 10px 0; padding-left: 18px; color: #3b372f; font-weight: 800; }
 .legacy-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.safe-recovery-mode {
+  margin-bottom: 18px;
+  border: 1px solid rgba(180, 75, 55, .28);
+  background: linear-gradient(135deg, #fff8ef, #f7e0cf);
+}
+.safe-recovery-mode h3 { margin: 4px 0 8px; color: #7b3327; }
+.safe-recovery-mode p { margin: 6px 0; color: #5d5046; font-weight: 800; line-height: 1.6; }
+.safe-recovery-error { color: #9a3a2d !important; }
+.safe-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
